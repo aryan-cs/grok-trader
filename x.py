@@ -251,17 +251,52 @@ def fetch_tweets(keywords=None,
         console.print(f"[bold red]An error occurred:[/bold red] {e}")
 
 def main():
-    if USE_TEST_DATA:
-        load_from_csv()
-    else:
-        # Fetch Elon Musk's tweets from March 3rd to April 25th, 2025
-        fetch_tweets(
-            usernames=["elonmusk"],
-            start_time="2025-03-03T00:00:00Z",
-            end_time="2025-04-25T00:00:00Z",
-            max_results=15,
-            full_archive=True
-        )
+    
+    """
+    THIS IS AN API LIMITATION NOT DESIGN CHOICE
+    """
+    MIN_TWEETS = 10
+    
+    """
+    Fetches tweets based on advanced criteria.
+    
+    Args:
+        keywords (list): List of keywords to search for.
+        usernames (list): List of usernames to search from.
+        start_time (str): ISO 8601 start time (e.g., "2023-12-01T00:00:00Z").
+        end_time (str): ISO 8601 end time.
+        logic (str): "AND" or "OR" for combining keywords.
+        min_likes (int): Minimum number of likes.
+        min_retweets (int): Minimum number of retweets.
+        entities (list): List of entities to search for.
+        max_results (int): Number of tweets to return (10-100).
+        full_archive (bool): Whether to search the full archive (required for tweets older than 7 days).
+    """
+    
+    fetch_tweets(
+        usernames=["elonmusk"],
+        start_time="2025-03-03T00:00:00Z",
+        end_time="2025-04-25T00:00:00Z",
+        max_results=MIN_TWEETS,
+        full_archive=True
+    )
+    
+    fetch_tweets(
+        # usernames=["elonmusk"],
+        keywords=["dildo", "wnba", "court"],
+        start_time="2025-05-03T00:00:00Z",
+        end_time="2025-09-25T00:00:00Z",
+        max_results=MIN_TWEETS,
+        full_archive=True
+    )
+    
+    fetch_tweets(
+        usernames=["F1",  "Drivers", "Champion"],
+        # start_time="2025-03-03T00:00:00Z",
+        # end_time="2025-04-25T00:00:00Z",
+        max_results=MIN_TWEETS,
+        full_archive=True
+    )
 
 if __name__ == "__main__":
     main()
