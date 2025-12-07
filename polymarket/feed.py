@@ -1,6 +1,7 @@
 import json
 import threading
 import time
+from typing import Protocol
 
 from websocket import WebSocketApp
 from polymarket.asset_id import fetch_event_market_clobs
@@ -109,13 +110,32 @@ class OrderBook:
         )
 
 
+class OrderBookStrategy(Protocol):
+    def on_order_book(self, market: str, order_book: OrderBook) -> None:
+        ...
+
+
+class NoOpStrategy:
+    def on_order_book(self, market: str, order_book: OrderBook) -> None:  # noqa: D401
+        """
+        Default strategy that leaves feed behaviour unchanged.
+        """
+        return
+
+
 class PolymarketFeed:
-    def __init__(self, url: str = WSS_BASE_URL, verbose: bool = False):
+    def __init__(
+        self,
+        url: str = WSS_BASE_URL,
+        verbose: bool = False,
+        strategy: OrderBookStrategy | None = None,
+    ):
         self.url = url
         self.verbose = verbose
         self.asset_ids: list[str] = []
         self.ws: WebSocketApp | None = None
         self._lock = threading.Lock()
+        self.strategy: OrderBookStrategy = strategy or NoOpStrategy()
 
         # asset_id -> OrderBook
         self.orderbooks: dict[str, OrderBook] = {}
@@ -229,12 +249,10 @@ class PolymarketFeed:
         print("WebSocket closed:", close_status_code, close_msg)
 
     def on_order_book(self, market, order_book: OrderBook) -> None:
-        # print(f"\nOrder book update for asset_id={market} (market={order_book.market})")
-        # print(f"timestamp={order_book.timestamp}, hash={order_book.hash}")
-        # print("best bid:", order_book.best_bid())
-        # print("best ask:", order_book.best_ask())
-        # TODO(ayushgun) - this is for the auto-trader
-        pass
+        """
+        Delegate order book updates to the configured strategy.
+        """
+        self.strategy.on_order_book(market, order_book)
 
     def start_in_background(self) -> threading.Thread:
         """

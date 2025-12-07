@@ -34,8 +34,6 @@ def fetch_events_all():
     return slugs
 
 
-print(fetch_events_all())
-
 # Example output:
 # {
 #     "will-donald-trump-be-times-person-of-the-year-for-2025": {
