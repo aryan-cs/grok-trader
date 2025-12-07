@@ -57,13 +57,16 @@ def generate_search_terms(market: str, client):
         print(f"Error generating search terms: {e}")
         return {"keywords": [], "subreddits": []}
 
-def get_market_sentiment(market: str, contracts: list = None, verbose: bool = False):
+def get_market_sentiment(market: str, contracts: list = None, start_date: str = None, end_date: str = None, limit: int = 20, verbose: bool = False):
     """
     Fetches and analyzes social media and news data for a specific market.
     
     Args:
         market (str): The market question or topic (e.g., "Will Lando Norris win?").
         contracts (list, optional): List of contract names to filter for.
+        start_date (str, optional): ISO 8601 start date for data fetch.
+        end_date (str, optional): ISO 8601 end date for data fetch.
+        limit (int, optional): Max number of items to fetch per source. Default 20.
         verbose (bool, optional): Whether to print progress updates.
         
     Returns:
@@ -71,6 +74,10 @@ def get_market_sentiment(market: str, contracts: list = None, verbose: bool = Fa
     """
     if verbose:
         print(f"Fetching data for market: {market}")
+        if start_date:
+            print(f"Start Date: {start_date}")
+        if end_date:
+            print(f"End Date: {end_date}")
         
     tweets = []
     posts = []
@@ -91,7 +98,7 @@ def get_market_sentiment(market: str, contracts: list = None, verbose: bool = Fa
             if verbose:
                 print("Fetching fresh Tweets...")
             try:
-                fetched = fetch_tweets(keywords=keywords, max_results=20)
+                fetched = fetch_tweets(keywords=keywords, start_time=start_date, end_time=end_date, max_results=limit)
                 if fetched:
                     tweets = fetched
             except Exception as e:
@@ -100,7 +107,7 @@ def get_market_sentiment(market: str, contracts: list = None, verbose: bool = Fa
             if verbose:
                 print("Fetching fresh Reddit posts...")
             try:
-                fetched = fetch_posts(keywords=keywords, subreddits=subreddits, limit=20)
+                fetched = fetch_posts(keywords=keywords, subreddits=subreddits, limit=limit)
                 if fetched:
                     posts = fetched
             except Exception as e:
@@ -109,7 +116,7 @@ def get_market_sentiment(market: str, contracts: list = None, verbose: bool = Fa
             if verbose:
                 print("Fetching fresh Reuters articles...")
             try:
-                fetched = fetch_articles(keywords=keywords, limit=20)
+                fetched = fetch_articles(keywords=keywords, limit=limit)
                 if fetched:
                     articles = fetched
             except Exception as e:
@@ -165,6 +172,18 @@ get_market_sentiment_tool = tool(
                 "type": "array",
                 "items": {"type": "string"},
                 "description": "Optional list of contract names to filter for."
+            },
+            "start_date": {
+                "type": "string",
+                "description": "ISO 8601 start date for data fetch (e.g., '2023-12-01T00:00:00Z')."
+            },
+            "end_date": {
+                "type": "string",
+                "description": "ISO 8601 end date for data fetch."
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Max number of items to fetch per source. Default 20."
             }
         },
         "required": ["market"]
@@ -174,9 +193,12 @@ get_market_sentiment_tool = tool(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fetch and analyze market sentiment.")
     parser.add_argument("market", nargs="?", default="Will AI take over the world?", help="The market question to analyze")
+    parser.add_argument("--start-date", help="ISO 8601 start date")
+    parser.add_argument("--end-date", help="ISO 8601 end date")
+    parser.add_argument("--limit", type=int, default=20, help="Max items per source")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     
     args = parser.parse_args()
     
-    res = get_market_sentiment(args.market, verbose=args.verbose)
+    res = get_market_sentiment(args.market, start_date=args.start_date, end_date=args.end_date, limit=args.limit, verbose=args.verbose)
     print(json.dumps(res, indent=2))
