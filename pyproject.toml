@@ -15,4 +15,5 @@ dependencies = [
     "tweepy>=4.16.0",
     "xai-sdk>=1.5.0",
     "websockets>=12.0",
+    "bs4>=0.0.2",
 ]

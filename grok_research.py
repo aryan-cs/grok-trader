@@ -9,6 +9,10 @@ from xai_sdk.chat import user, system, tool_result
 sys.path.append(os.path.join(os.path.dirname(__file__), "pre-processing"))
 from process_market import get_market_sentiment, get_market_sentiment_tool
 
+# Add grokipedia to path
+sys.path.append(os.path.join(os.path.dirname(__file__), "datafeed", "grokipedia"))
+from grokipedia import fetch_grokipedia_article, get_grokipedia_article_tool
+
 load_dotenv()
 
 MODEL_NAME = "grok-4-1-fast-non-reasoning"
@@ -76,16 +80,10 @@ Additionally, here are some custom user instructions to focus on:
             }
         )
 
-    # Initialize chat with tools
-    chat = client.chat.create(
-        model=MODEL_NAME,
-        tools=[get_market_sentiment_tool],
-        tool_choice="auto"
-    )
         # Initialize chat with tools
         chat = client.chat.create(
-            model="grok-4-1-fast-non-reasoning",
-            tools=[get_market_sentiment_tool],
+            model=MODEL_NAME,
+            tools=[get_market_sentiment_tool, get_grokipedia_article_tool],
             tool_choice="auto",
         )
 
@@ -132,6 +130,32 @@ Additionally, here are some custom user instructions to focus on:
                         tool_result(
                             tool_call_id=tool_call.id,
                             content=json.dumps(sentiment_data),
+                        )
+                    )
+
+                elif tool_call.function.name == "fetch_grokipedia_article":
+                    args = json.loads(tool_call.function.arguments)
+                    print(
+                        f"Grok requested tool execution: fetch_grokipedia_article({args})"
+                    )
+
+                    # Send thinking update
+                    await websocket.send_json(
+                        {
+                            "message_type": "research",
+                            "type": "thinking",
+                            "content": f"Fetching Grokipedia article for {args.get('topic')}...",
+                        }
+                    )
+
+                    # Call the actual function
+                    article_data = fetch_grokipedia_article(**args)
+
+                    # Add result to chat
+                    chat.append(
+                        tool_result(
+                            tool_call_id=tool_call.id,
+                            content=json.dumps(article_data),
                         )
                     )
 
