@@ -3,7 +3,7 @@ import threading
 import time
 
 from websocket import WebSocketApp
-from asset_id import fetch_event
+from polymarket.asset_id import fetch_event_market_clobs
 
 
 WSS_BASE_URL = "wss://ws-subscriptions-clob.polymarket.com"
@@ -24,13 +24,11 @@ class OrderBook:
         self.timestamp = msg.get("timestamp")
         self.hash = msg.get("hash")
 
-        # Some older docs mention buys/sells in the text, but the example response
-        # (and current docs) use 'bids' and 'asks'. We support both just in case.
         raw_bids = msg.get("bids") or msg.get("buys") or []
         raw_asks = msg.get("asks") or msg.get("sells") or []
 
         def _parse_side(levels):
-            parsed = []
+            parsed: list[tuple[float, float]] = []
             for level in levels:
                 price_str = level.get("price", "0")
                 size_str = level.get("size", "0")
@@ -45,8 +43,63 @@ class OrderBook:
                 parsed.append((price, size))
             return parsed
 
-        self.bids = _parse_side(raw_bids)
-        self.asks = _parse_side(raw_asks)
+        bids = _parse_side(raw_bids)
+        asks = _parse_side(raw_asks)
+
+        # Maintain sorted invariant:
+        # - bids: highest price first
+        # - asks: lowest price first
+        bids.sort(key=lambda x: x[0], reverse=True)
+        asks.sort(key=lambda x: x[0])
+
+        self.bids = bids
+        self.asks = asks
+
+    def _upsert_bid(self, price: float, size: float) -> None:
+        if size <= 0:
+            self.bids = [(p, s) for (p, s) in self.bids if p != price]
+            return
+
+        for i, (p, _) in enumerate(self.bids):
+            if p == price:
+                # Update in place
+                self.bids[i] = (price, size)
+                return
+            if p < price:
+                # Insert before the first lower price
+                self.bids.insert(i, (price, size))
+                return
+
+        # If we didn't insert yet, append at the end (lowest price)
+        self.bids.append((price, size))
+
+    def _upsert_ask(self, price: float, size: float) -> None:
+        if size <= 0:
+            self.asks = [(p, s) for (p, s) in self.asks if p != price]
+            return
+
+        for i, (p, _) in enumerate(self.asks):
+            if p == price:
+                # Update in place
+                self.asks[i] = (price, size)
+                return
+            if p > price:
+                # Insert before the first higher price
+                self.asks.insert(i, (price, size))
+                return
+
+        # If we didn't insert yet, append at the end (highest price)
+        self.asks.append((price, size))
+
+    def best_bid(self, n: int = 1) -> list[tuple[float, float]]:
+        if n <= 0:
+            return []
+        return self.bids[:n]
+
+    def best_ask(self, n: int = 1) -> list[tuple[float, float]]:
+        if n <= 0:
+            return []
+        return self.asks[:n]
 
     def __repr__(self) -> str:
         return (
@@ -62,9 +115,15 @@ class PolymarketFeed:
         self.verbose = verbose
         self.asset_ids: list[str] = []
         self.ws: WebSocketApp | None = None
+        self._lock = threading.Lock()
 
         # asset_id -> OrderBook
         self.orderbooks: dict[str, OrderBook] = {}
+
+        # slug -> {"yes": token_id, "no": token_id}
+        self.market_tokens: dict[str, dict[str, str]] = {}
+        # token_id -> (slug, side)
+        self.token_lookup: dict[str, tuple[str, str]] = {}
 
     def connect(self) -> None:
         if not self.asset_ids:
@@ -85,13 +144,23 @@ class PolymarketFeed:
     def subscribe(self, markets: list[str]) -> None:
         self.asset_ids = list(markets)
 
+    def subscribe_event(self, event_slug: str) -> None:
+        self.market_tokens = fetch_event_market_clobs(event_slug)
+        token_ids: list[str] = []
+        self.token_lookup = {}
+        for slug, sides in self.market_tokens.items():
+            for side, token in sides.items():
+                token_ids.append(token)
+                self.token_lookup[token] = (slug, side)
+        self.subscribe(token_ids)
+
     def _on_open(self, ws) -> None:
         if self.verbose:
             print("WebSocket opened, sending subscription...")
 
         subscribe_msg = {
             "assets_ids": self.asset_ids,
-            "type": MARKET_CHANNEL,  # "market"
+            "type": MARKET_CHANNEL,
         }
         ws.send(json.dumps(subscribe_msg))
 
@@ -140,14 +209,15 @@ class PolymarketFeed:
         if not asset_id:
             return
 
-        # Get or create OrderBook instance for this asset_id
-        orderbook = self.orderbooks.get(asset_id)
-        if orderbook is None:
-            orderbook = OrderBook(asset_id=asset_id, market=msg.get("market"))
-            self.orderbooks[asset_id] = orderbook
+        with self._lock:
+            # Get or create OrderBook instance for this asset_id
+            orderbook = self.orderbooks.get(asset_id)
+            if orderbook is None:
+                orderbook = OrderBook(asset_id=asset_id, market=msg.get("market"))
+                self.orderbooks[asset_id] = orderbook
 
-        # Update snapshot from the message
-        orderbook.update_from_book_message(msg)
+            # Update snapshot from the message
+            orderbook.update_from_book_message(msg)
 
         # Callback for the updated order book snapshot
         self.on_order_book(asset_id, orderbook)
@@ -159,21 +229,56 @@ class PolymarketFeed:
         print("WebSocket closed:", close_status_code, close_msg)
 
     def on_order_book(self, market, order_book: OrderBook) -> None:
-        # TODO(ayushgun) - fix this to store states
+        # print(f"\nOrder book update for asset_id={market} (market={order_book.market})")
+        # print(f"timestamp={order_book.timestamp}, hash={order_book.hash}")
+        # print("best bid:", order_book.best_bid())
+        # print("best ask:", order_book.best_ask())
+        # TODO(ayushgun) - this is for the auto-trader
+        pass
 
-        print(f"\nOrder book update for asset_id={market} (market={order_book.market})")
-        print(f"timestamp={order_book.timestamp}, hash={order_book.hash}")
+    def start_in_background(self) -> threading.Thread:
+        """
+        Run the websocket client on a daemon thread so snapshots keep updating
+        while the rest of the app (e.g. REST API) remains responsive.
+        """
+        t = threading.Thread(target=self.connect, daemon=True)
+        t.start()
+        return t
 
-        def _fmt_levels(levels):
-            return ", ".join(f"{size}@{price}" for price, size in levels)
+    def get_report(self) -> str:
+        def _fmt(levels: list[tuple[float, float]]):
+            if not levels:
+                return "—"
+            price, size = levels[0]
+            return f"{price:.4f} @ {size}"
 
-        print("Bids:", _fmt_levels(order_book.bids))
-        print("Asks:", _fmt_levels(order_book.asks))
+        lines: list[str] = [
+            f"markets={len(self.market_tokens)}",
+            f"assets={len(self.orderbooks)}",
+        ]
 
+        with self._lock:
+            for slug, sides in self.market_tokens.items():
+                yes_id = sides.get("yes")
+                no_id = sides.get("no")
+                yes_ob = self.orderbooks.get(yes_id)
+                no_ob = self.orderbooks.get(no_id)
 
-if __name__ == "__main__":
-    market_ids = fetch_event("elc-cha-por-2025-12-06")
-    yes_asset_ids = [m["yes"] for m in market_ids.values()]
-    feed = PolymarketFeed(verbose=True)
-    feed.subscribe(yes_asset_ids)
-    feed.connect()
+                lines.append(f"\nmarket={slug}")
+                if yes_ob:
+                    lines.append(
+                        f" yes asset={yes_id} ts={yes_ob.timestamp} hash={yes_ob.hash} "
+                        f"best_bid={_fmt(yes_ob.bids)} best_ask={_fmt(yes_ob.asks)}"
+                    )
+                else:
+                    lines.append(f" yes asset={yes_id} (no data yet)")
+
+                if no_ob:
+                    lines.append(
+                        f" no  asset={no_id} ts={no_ob.timestamp} hash={no_ob.hash} "
+                        f"best_bid={_fmt(no_ob.bids)} best_ask={_fmt(no_ob.asks)}"
+                    )
+                else:
+                    lines.append(f" no  asset={no_id} (no data yet)")
+
+        return "\n".join(lines)

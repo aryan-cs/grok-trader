@@ -25,7 +25,16 @@ def fetch_event_market_slugs(event_slug: str):
     return slugs
 
 
-fetch_event_market_slugs("fed-decision-in-january")
+def fetch_events_all():
+    url = "https://gamma-api.polymarket.com/events?closed=false"
+    response = requests.get(url).json()
+    slugs = []
+    for event in response:
+        slugs.append(event["slug"])
+    return slugs
+
+
+print(fetch_events_all())
 
 # Example output:
 # {
