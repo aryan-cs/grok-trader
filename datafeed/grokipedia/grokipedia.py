@@ -228,5 +228,15 @@ get_grokipedia_article_tool = tool(
     }
 )
 
+def get_keywords_for_slug(slug):
+    result = fetch_grokipedia_article(slug, verbose=False)
+    keywords = []
+    if result and 'content' in result:
+        text = result['content']
+        keywords = [w for w in set(text.split()) if len(w) > 3]
+    if not keywords:
+        keywords = slug.split('-')
+    return keywords
+
 if __name__ == "__main__":
     fetch_grokipedia_article("Polymarket", verbose=True)

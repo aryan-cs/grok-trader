@@ -2,6 +2,51 @@ import os
 import tweepy
 from dotenv import load_dotenv
 from pathlib import Path
+from xai_sdk import Client
+
+verbose = False
+
+def generate_query(source, slug):
+    """
+    Generate a query for the given source using Grok (XAI API).
+    - For 'x': returns a string query with AND/OR and keywords.
+    - For 'reddit': returns a JSON object with 'subreddits' (list) and 'keywords' (list) for Reddit API.
+    - For 'reuters': returns a string query for Google News RSS.
+    """
+    xai_api_key = os.getenv("XAI_API_KEY")
+    if not xai_api_key:
+        raise RuntimeError("XAI_API_KEY not found in environment")
+    client = Client(api_key=xai_api_key)
+    from xai_sdk.chat import user, system
+
+    # Compose system and user messages for Grok
+    if source == 'x':
+        system_msg = system("You are an expert at writing boolean queries for the X (Twitter) API. Given a market slug, generate a boolean query string using AND/OR and relevant keywords, hashtags, and cashtags. Return only the query string. Here is an example: '(Lando Norris OR #LandoNorris OR #LN4) (win OR winner OR victory OR champion OR #F1Winner) (race OR Grand Prix OR #Formula1 OR #F1)'")
+        user_msg = user(f"Market slug: {slug}")
+        chat = client.chat.create(model="grok-4-1-fast-reasoning", messages=[system_msg])
+        chat.append(user_msg)
+        resp = chat.sample()
+        return getattr(resp, 'content', None)
+    elif source == 'reddit':
+        system_msg = system("You are an expert at writing Reddit search queries. Given a market slug, return a JSON object with two fields: 'subreddits' (list of relevant subreddits) and 'keywords' (list of relevant keywords). Return only the JSON object.")
+        user_msg = user(f"Market slug: {slug}")
+        chat = client.chat.create(model="grok-4-1-fast-reasoning", messages=[system_msg])
+        chat.append(user_msg)
+        resp = chat.sample()
+        import json
+        try:
+            return json.loads(getattr(resp, 'content', '{}'))
+        except Exception:
+            return {}
+    elif source == 'reuters':
+        system_msg = system("You are an expert at writing Google News queries for Reuters. Given a market slug, generate a query string suitable for Google News RSS search, using relevant keywords. Return only the query string.")
+        user_msg = user(f"Market slug: {slug}")
+        chat = client.chat.create(model="grok-4-1-fast-reasoning", messages=[system_msg])
+        chat.append(user_msg)
+        resp = chat.sample()
+        return getattr(resp, 'content', None)
+    return None
+    
 
 class TweetFeed:
     def __init__(self, market_slug, min_likes, strategy, poll_interval=60, max_results=10):
@@ -27,12 +72,14 @@ class TweetFeed:
         self.client = tweepy.Client(bearer_token=self.bearer_token)
 
     def build_query(self):
-        keywords = self.market_slug.split('-') if self.market_slug else []
-        query = f"({' OR '.join(keywords)}) lang:en -is:retweet"
-        return query
+        # keywords = self.market_slug.split('-') if self.market_slug else []
+        # query = f"({' OR '.join(keywords)}) lang:en -is:retweet"
+        # return query
+        return generate_query('x', self.market_slug) + "-is:retweet lang:en"
 
     def fetch_and_process(self):
         query = self.build_query()
+        # print(query)
         response = self.client.search_recent_tweets(
             query=query,
             max_results=self.max_results,
@@ -82,7 +129,7 @@ def __main__():
             print(f"{tweet['url']} - Likes: {tweet['likes']}")
 
     feed = TweetFeed(
-        market_slug="will-lando-norris-win",
+        market_slug="will-space-x-ipo-this-year",
         min_likes=0,
         strategy=PrintStrategy(),
         poll_interval=60,

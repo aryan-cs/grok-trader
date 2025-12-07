@@ -274,6 +274,20 @@ def load_articles(keywords=None, start_time=None, end_time=None, logic="AND"):
             
     return results
 
+def get_reuters_links_for_slug(slug, max_results=10):
+    from datafeed.grokipedia.grokipedia import fetch_grokipedia_article
+    grok_result = fetch_grokipedia_article(slug, verbose=False)
+    keywords = []
+    if grok_result and 'content' in grok_result:
+        text = grok_result['content']
+        keywords = [w for w in set(text.split()) if len(w) > 3]
+    if not keywords:
+        keywords = slug.split('-')
+    # Fetch articles using keywords
+    # TODO: Integrate with fetch_articles logic
+    # For now, just return empty list
+    return []
+
 def main():
     fetch_articles(keywords=["Elon Musk", "Tesla"], limit=5)
     fetch_articles(keywords=["Oil", "OPEC"], limit=5)

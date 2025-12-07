@@ -385,6 +385,22 @@ def load_posts(keywords=None,
             
     return results
 
+def get_reddit_links_for_slug(slug, max_results=10):
+    from datafeed.grokipedia.grokipedia import fetch_grokipedia_article
+    grok_result = fetch_grokipedia_article(slug, verbose=False)
+    keywords = []
+    subreddits = []
+    if grok_result and 'content' in grok_result:
+        text = grok_result['content']
+        keywords = [w for w in set(text.split()) if len(w) > 3]
+        subreddits = [w[2:] for w in text.split() if w.startswith('r/')]
+    if not keywords:
+        keywords = slug.split('-')
+    # Use fetch_posts to get actual links
+    posts = fetch_posts(keywords=keywords, subreddits=subreddits if subreddits else None, limit=max_results)
+    links = [post['url'] for post in posts] if posts else []
+    return links
+
 def main():
     
     """  
