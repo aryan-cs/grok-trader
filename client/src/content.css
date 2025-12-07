@@ -1,0 +1,10 @@
+/* Content script styles - minimal to avoid breaking the page */
+#grok-trader-root {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  z-index: 2147483647 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
