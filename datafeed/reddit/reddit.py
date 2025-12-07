@@ -39,6 +39,17 @@ class Post:
 def save_to_csv(post, user):
     file_exists = os.path.isfile(CSV_FILE)
     
+    # Check for duplicates
+    if file_exists:
+        try:
+            with open(CSV_FILE, mode='r', encoding='utf-8') as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    if row.get("post_id") == str(post.id):
+                        return
+        except Exception:
+            pass
+    
     with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
         

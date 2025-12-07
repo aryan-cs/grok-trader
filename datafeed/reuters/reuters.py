@@ -24,6 +24,17 @@ class Article:
 def save_to_csv(article):
     file_exists = os.path.isfile(CSV_FILE)
     
+    # Check for duplicates
+    if file_exists:
+        try:
+            with open(CSV_FILE, mode='r', encoding='utf-8') as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    if row.get("link") == article.link:
+                        return
+        except Exception:
+            pass
+
     with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
         
@@ -87,12 +98,38 @@ def load_from_csv():
             
         console.print(f"\n[bold green]Displayed {count} articles from CSV.[/bold green]")
 
-def fetch_articles(keywords=None, limit=10):
+def fetch_articles(keywords=None, limit=10, start_time=None, end_time=None):
+    """
+    Fetches articles from Reuters using Google News RSS feed.
+    
+    Args:
+        keywords (list): List of keywords to search for.
+        limit (int): Number of articles to return.
+        start_time (str): ISO 8601 start time.
+        end_time (str): ISO 8601 end time.
+    """
     if not keywords:
         console.print("[bold red]Error:[/bold red] Keywords are required for search.")
         return
 
     query_str = " ".join(keywords)
+    
+    # Add date filtering to query if provided
+    # Google News supports "after:YYYY-MM-DD" and "before:YYYY-MM-DD"
+    if start_time:
+        try:
+            dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            query_str += f" after:{dt.strftime('%Y-%m-%d')}"
+        except ValueError:
+            pass
+            
+    if end_time:
+        try:
+            dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            query_str += f" before:{dt.strftime('%Y-%m-%d')}"
+        except ValueError:
+            pass
+
     full_query = f"site:reuters.com {query_str}"
     encoded_query = urllib.parse.quote(full_query)
     
@@ -112,12 +149,31 @@ def fetch_articles(keywords=None, limit=10):
         
         fetched_articles = []
         count = 0
-        for item in items[:limit]:
+        
+        # Parse start/end times for client-side filtering as well (RSS date format handling)
+        start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00')) if start_time else None
+        end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00')) if end_time else None
+
+        for item in items:
+            if count >= limit:
+                break
+                
             title = item.find("title").text if item.find("title") is not None else "No Title"
             link = item.find("link").text if item.find("link") is not None else ""
-            pub_date = item.find("pubDate").text if item.find("pubDate") is not None else ""
+            pub_date_str = item.find("pubDate").text if item.find("pubDate") is not None else ""
             description = item.find("description").text if item.find("description") is not None else ""
             
+            # Client-side date filtering (double check)
+            if (start_dt or end_dt) and pub_date_str:
+                try:
+                    article_dt = email.utils.parsedate_to_datetime(pub_date_str)
+                    if start_dt and article_dt < start_dt:
+                        continue
+                    if end_dt and article_dt > end_dt:
+                        continue
+                except Exception:
+                    pass
+
             if description:
                 description = re.sub(r'<[^>]+>', '', description)
                 description = description.replace('&nbsp;', ' ')
@@ -129,7 +185,7 @@ def fetch_articles(keywords=None, limit=10):
             article = Article(
                 title=title,
                 link=link,
-                published=pub_date,
+                published=pub_date_str,
                 summary=description
             )
             
@@ -154,9 +210,6 @@ def fetch_articles(keywords=None, limit=10):
     except Exception as e:
         console.print(f"[bold red]An error occurred:[/bold red] {e}")
         return []
-
-    except Exception as e:
-        console.print(f"[bold red]An error occurred:[/bold red] {e}")
 
 def load_articles(keywords=None, start_time=None, end_time=None, logic="AND"):
     """
