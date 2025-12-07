@@ -6,7 +6,6 @@ const AutoTrade = ({ eventSlug, selectedMarket, clientId }) => {
   const [error, setError] = useState(null);
 
   // Form state
-  const [xHandles, setXHandles] = useState('');
   const [condition, setCondition] = useState('');
   const [amount, setAmount] = useState('');
   const [limit, setLimit] = useState('');
@@ -46,17 +45,20 @@ const AutoTrade = ({ eventSlug, selectedMarket, clientId }) => {
     setLoading(true);
     setError(null);
 
-    // Parse X handles (comma or newline separated)
-    const handlesArray = xHandles
-      .split(/[,\n]/)
-      .map(h => h.trim())
-      .filter(h => h.length > 0);
-
-    if (handlesArray.length === 0) {
-      setError('Please enter at least one X handle');
+    // Validate that we have eventSlug
+    if (!eventSlug) {
+      setError('Event information not available. Please refresh the page.');
       setLoading(false);
       return;
     }
+
+    console.log('Starting autotrade with:', {
+      event_slug: eventSlug,
+      market_slug: selectedMarket,
+      condition,
+      amount: parseFloat(amount),
+      limit: parseFloat(limit),
+    });
 
     try {
       const response = await fetch('http://localhost:8765/autotrade/start', {
@@ -66,8 +68,8 @@ const AutoTrade = ({ eventSlug, selectedMarket, clientId }) => {
         },
         body: JSON.stringify({
           client_id: clientId,
+          event_slug: eventSlug,
           market_slug: selectedMarket,
-          x_handles: handlesArray,
           condition: condition,
           amount: parseFloat(amount),
           limit: parseFloat(limit),
@@ -80,7 +82,6 @@ const AutoTrade = ({ eventSlug, selectedMarket, clientId }) => {
         // Reload to show the active auto trade
         fetchAutoTrade();
         // Clear form
-        setXHandles('');
         setCondition('');
         setAmount('');
         setLimit('');
@@ -139,12 +140,14 @@ const AutoTrade = ({ eventSlug, selectedMarket, clientId }) => {
 
   return (
     <div className="grok-auto-trade">
-      <div className="grok-section">
-        <h3>Auto Trader</h3>
         <p className="grok-auto-trade-description">
-          <i>Automatically execute trades based on X activity and conditions.</i>
+          <i>Automatically execute trades when specified conditions are met.</i>
         </p>
-      </div>
+        {eventSlug && (
+          <p style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
+            Event: {eventSlug}
+          </p>
+        )}
 
       {error && (
         <div className="grok-section">
@@ -169,10 +172,6 @@ const AutoTrade = ({ eventSlug, selectedMarket, clientId }) => {
 
             <div className="grok-auto-trade-details">
               <div className="grok-auto-trade-detail">
-                <strong>Watching:</strong>
-                <span>{autoTrade.x_handles.join(', ')}</span>
-              </div>
-              <div className="grok-auto-trade-detail">
                 <strong>Condition:</strong>
                 <span>{autoTrade.condition}</span>
               </div>
@@ -184,10 +183,20 @@ const AutoTrade = ({ eventSlug, selectedMarket, clientId }) => {
                 <strong>Limit Price:</strong>
                 <span>{autoTrade.limit}</span>
               </div>
+              <div className="grok-auto-trade-detail">
+                <strong>PnL:</strong>
+                <span className={autoTrade.pnl >= 0 ? 'grok-pnl-positive' : 'grok-pnl-negative'}>
+                  ${autoTrade.pnl?.toFixed(2) || '0.00'}
+                </span>
+              </div>
             </div>
 
             <p className="grok-auto-trade-status">
-              Status: <span className="grok-status-active">Monitoring</span>
+              <span className="grok-auto-trade-status-label">Status:</span>
+              <span className="grok-status-active">
+                <div className="grok-spinner-small"></div>
+                Monitoring
+              </span>
             </p>
             <button
               className="grok-stop-autotrade-btn"
@@ -203,22 +212,10 @@ const AutoTrade = ({ eventSlug, selectedMarket, clientId }) => {
       {!loading && !autoTrade && (
         <form onSubmit={handleSubmit}>
           <div className="grok-section">
-            <label className="grok-input-label">X Handles to Monitor</label>
-            <textarea
-              className="grok-textarea"
-              placeholder="Enter X handles (comma or newline separated)&#10;Example: @elonmusk, @paulg, @sama"
-              value={xHandles}
-              onChange={(e) => setXHandles(e.target.value)}
-              rows={3}
-              required
-            />
-          </div>
-
-          <div className="grok-section">
             <label className="grok-input-label">Condition</label>
             <textarea
               className="grok-textarea"
-              placeholder="Describe the condition that triggers the trade&#10;Example: Elon tweets that Tesla will acquire xAI"
+              placeholder="Describe the condition that triggers the trade&#10;Example: News breaks that Tesla will acquire xAI"
               value={condition}
               onChange={(e) => setCondition(e.target.value)}
               rows={3}

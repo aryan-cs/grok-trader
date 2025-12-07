@@ -1055,10 +1055,30 @@
   margin: 8px 0 16px 0;
   font-size: 14px;
   color: var(--polymarket-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.grok-auto-trade-status-label {
+  color: var(--polymarket-text);
 }
 
 .grok-status-active {
   color: #10b981;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.grok-pnl-positive {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.grok-pnl-negative {
+  color: #ef4444;
   font-weight: 600;
 }
 
