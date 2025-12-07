@@ -18,12 +18,12 @@ CSV_FILE = "tweets_data.csv"
 
 console = Console()
 
-class MockUser:
+class User:
     def __init__(self, username, name):
         self.username = username
         self.name = name
 
-class MockTweet:
+class Tweet:
     def __init__(self, id, text, created_at, metrics, lang, author_id):
         self.id = id
         self.text = text
@@ -131,7 +131,7 @@ def load_from_csv():
         reader = csv.DictReader(file)
         count = 0
         for row in reader:
-            user = MockUser(
+            user = User(
                 username=row.get("username", "Unknown"),
                 name=row.get("name", "Unknown")
             )
@@ -144,7 +144,7 @@ def load_from_csv():
                 "impression_count": int(row.get("impressions", 0))
             }
             
-            tweet = MockTweet(
+            tweet = Tweet(
                 id=row.get("tweet_id"),
                 text=row.get("text"),
                 created_at=row.get("created_at"),
