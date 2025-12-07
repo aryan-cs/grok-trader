@@ -1,6 +1,7 @@
 import requests
 import os
 import csv
+import re
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import email.utils
@@ -123,6 +124,11 @@ def fetch_articles(keywords=None, limit=10):
             pub_date = item.find("pubDate").text if item.find("pubDate") is not None else ""
             description = item.find("description").text if item.find("description") is not None else ""
             
+            if description:
+                description = re.sub(r'<[^>]+>', '', description)
+                description = description.replace('&nbsp;', ' ')
+                description = description.replace('Reuters', '').strip()
+
             if " - Reuters" in title:
                 title = title.replace(" - Reuters", "")
             

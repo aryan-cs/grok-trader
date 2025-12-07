@@ -5,13 +5,15 @@ import re
 import time
 from datetime import datetime
 from dotenv import load_dotenv
+from pathlib import Path
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
 from rich import box
 
-load_dotenv()
+root_dir = Path(__file__).resolve().parents[2]
+load_dotenv(root_dir / '.env')
 
 REDDIT_USER_AGENT = os.getenv("REDDIT_USER_AGENT", "python:grok-trader:v1.0 (by /u/yourusername)")
 USE_TEST_DATA = False

@@ -4,13 +4,16 @@ import csv
 import re
 from datetime import datetime
 from dotenv import load_dotenv
+from pathlib import Path
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
 from rich import box
 
-load_dotenv()
+# Load .env from project root
+root_dir = Path(__file__).resolve().parents[2]
+load_dotenv(root_dir / '.env')
 
 BEARER_TOKEN = os.getenv("X_BEARER_TOKEN")
 USE_TEST_DATA = False
