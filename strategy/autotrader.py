@@ -11,19 +11,11 @@ from strategy.polymarket import Polymarket
 from strategy.tweets import TweetFeed
 
 
-# Buy
-class TradingDecision:
-    def __init__(
-        self,
-        side,
-    ):
-        pass
-
-
 class Strategy:
-    def __init__(self, market_slug, condition):
+    def __init__(self, market_slug, condition, max_size):
         self.market_slug = market_slug
         self.condition = condition
+        self.max_size = max_size
 
         self.yes_book = None
         self.no_book = None
@@ -49,7 +41,7 @@ class Strategy:
         if len(text) > 120:
             text = text[:117] + "..."
 
-        # ask grok for trading decision w/ view of last 10 relevant tweets and state of books
+        # place the order TODO(ayushgun) later
 
     def on_new_book(self, yes_book, no_book):
         # first time logging
