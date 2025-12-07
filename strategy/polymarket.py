@@ -73,8 +73,13 @@ class Book:
 
 class Polymarket:
     def __init__(
-        self, market_slug: str, strategy: Callable[[Book], None], url: str = WSS_URL
+        self,
+        event_slug: str,
+        strategy: Callable[[Book | None, Book | None], None],
+        market_slug: str | None = None,
+        url: str = WSS_URL,
     ):
+        self.event_slug = event_slug
         self.market_slug = market_slug
         self.strategy = strategy
         self.url = url
@@ -82,6 +87,7 @@ class Polymarket:
         self.asset_ids: list[str] = []
         self.token_lookup: dict[str, tuple[str, str]] = {}
         self.books: dict[str, Book] = {}
+        self.market_books: dict[str, dict[str, Book]] = {}
 
         self._ws: WebSocketApp | None = None
         self._lock = threading.Lock()
@@ -91,19 +97,25 @@ class Polymarket:
         self._start_socket()
 
     def _prepare_subscription(self) -> None:
-        mapping = fetch_event_market_clobs(self.market_slug)
-        if self.market_slug in mapping:
+        mapping = fetch_event_market_clobs(self.event_slug)
+        if not mapping:
+            raise ValueError(f"No markets found for event '{self.event_slug}'")
+
+        if self.market_slug:
+            if self.market_slug not in mapping:
+                raise ValueError(
+                    f"Market slug '{self.market_slug}' not found in event '{self.event_slug}'"
+                )
             selected = {self.market_slug: mapping[self.market_slug]}
-        elif mapping:
-            first_slug, tokens = next(iter(mapping.items()))
-            selected = {first_slug: tokens}
         else:
-            raise ValueError(f"No markets found for slug '{self.market_slug}'")
+            selected = mapping  # subscribe to all markets under the event
 
         for slug, sides in selected.items():
+            market_entry = self.market_books.setdefault(slug, {})
             for side, token in sides.items():
                 self.token_lookup[token] = (slug, side)
                 self.asset_ids.append(token)
+                market_entry.setdefault(side)
 
     def _start_socket(self) -> None:
         if not self.asset_ids:
@@ -163,15 +175,21 @@ class Polymarket:
                 slug, side = self.token_lookup.get(asset_id, (self.market_slug, ""))
                 book = Book(asset_id=asset_id, market=slug, side=side)
                 self.books[asset_id] = book
+                self.market_books.setdefault(slug, {})[side] = book
 
             book.update_from_message(msg)
 
+            slug, side = self.token_lookup.get(asset_id, (book.market, book.side))
+            market_entry = self.market_books.setdefault(slug, {})
+            market_entry[side] = book
+            yes_book = market_entry.get("yes")
+            no_book = market_entry.get("no")
+
         try:
-            (
-                self.strategy.on_new_book(book)
-                if hasattr(self.strategy, "on_new_book")
-                else self.strategy(book)
-            )
+            if hasattr(self.strategy, "on_new_book"):
+                self.strategy.on_new_book(yes_book, no_book)
+            else:
+                self.strategy(yes_book, no_book)
         except Exception:
             # Strategy exceptions shouldn't kill the feed
             return
