@@ -1,10 +1,11 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 import json
 from grok_chat import stream_chat_response
 from grok_research import research_market, research_followup
+from polymarket.asset_id import fetch_event_market_slugs
 
 app = FastAPI()
 
@@ -101,6 +102,27 @@ async def research_followup_endpoint(request: ResearchFollowupRequest):
     await research_followup(websocket, request.messages)
 
     return {"status": "streaming"}
+
+
+@app.get("/market-slugs")
+async def get_market_slugs(event_slug: str = Query(..., description="The event slug to fetch market slugs for")):
+    """Get all market slugs for a given event slug"""
+    try:
+        print(f"📊 Fetching market slugs for event: {event_slug}")
+        slugs = fetch_event_market_slugs(event_slug)
+
+        return {
+            "status": "success",
+            "event_slug": event_slug,
+            "market_slugs": slugs
+        }
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Error fetching market slugs: {error_msg}")
+        return {
+            "status": "error",
+            "error": error_msg
+        }
 
 
 @app.websocket("/ws")

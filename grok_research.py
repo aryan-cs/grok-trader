@@ -1,9 +1,9 @@
 import os
 import sys
 import json
+import asyncio
 from dotenv import load_dotenv
-from xai_sdk import Client
-from xai_sdk.chat import user, system, tool_result
+from openai import AsyncOpenAI
 
 # Add pre-processing to path to allow import
 sys.path.append(os.path.join(os.path.dirname(__file__), "pre-processing"))
@@ -16,6 +16,13 @@ from grokipedia import fetch_grokipedia_article, get_grokipedia_article_tool
 load_dotenv()
 
 MODEL_NAME = "grok-4-1-fast-non-reasoning"
+XAI_API_KEY = os.getenv("XAI_API_KEY")
+
+# Initialize xAI client (uses OpenAI SDK with custom base URL)
+client = AsyncOpenAI(
+    api_key=XAI_API_KEY,
+    base_url="https://api.x.ai/v1",
+)
 
 
 async def research_market(
@@ -27,8 +34,6 @@ async def research_market(
     no_price: int,
 ):
     """Stream research results to WebSocket"""
-    client = Client(api_key=os.getenv("XAI_API_KEY"))
-
     prompt = f"""You are an expert at analyzing prediction markets.
 
 You will analyze the following market and provide a recommendation for the user to make a trade.
@@ -50,15 +55,14 @@ Prediction Market General rules:
 - You should should only recommend a contract purchase if it is underpriced and buying will result in positive expected value.
 - Expected value is calculated as (probability of winning * payout) - cost of the contract. Basically if the probablity of the contract is greater than the implied probability of the market, then it is underpriced.
 
-You have access to a tool 'get_market_sentiment' that can fetch real-time social media and news sentiment about the market. 
-USE THIS TOOL to get the latest information before making your decision.
+I will provide you with real-time social media and news sentiment data about this market. Use this information to inform your analysis.
 
 Provide a detailed analysis covering:
 1. Key factors that could influence the outcome
-2. Current trends or relevant information (incorporate findings from the tool)
+2. Current trends or relevant information (incorporate the sentiment data provided)
 3. Risk assessment
 4. Actual fair prices for YES and NO contracts based on the true odds of the market.
-4. Your final recommendation (YES or NO or NOOP)
+5. Your final recommendation (YES or NO or NOOP)
 
 End your response with a clear recommendation: "RECOMMENDATION: YES" or "RECOMMENDATION: NO" or "RECOMMENDATION: NOOP"
 
@@ -70,119 +74,85 @@ Additionally, here are some custom user instructions to focus on:
 
     print(f"Starting research for: {market_title}")
 
+    if not XAI_API_KEY:
+        await websocket.send_json(
+            {
+                "message_type": "research",
+                "type": "error",
+                "error": "XAI_API_KEY not configured",
+            }
+        )
+        return
+
     try:
         # Send initial thinking message
         await websocket.send_json(
             {
                 "message_type": "research",
                 "type": "thinking",
-                "content": "Initializing research analysis...",
+                "content": "Gathering market sentiment data...",
             }
         )
 
-        # Initialize chat with tools
-        chat = client.chat.create(
-            model=MODEL_NAME,
-            tools=[get_market_sentiment_tool, get_grokipedia_article_tool],
-            tool_choice="auto",
-        )
+        # Fetch market sentiment data upfront
+        sentiment_data = get_market_sentiment(market_title)
+        sentiment_text = json.dumps(sentiment_data, indent=2)
 
-        chat.append(
-            system("You are a helpful assistant that analyzes prediction markets.")
-        )
-        chat.append(user(prompt))
+        # Update prompt to include sentiment data
+        prompt_with_data = f"""{prompt}
 
-        # Send thinking update
+---
+
+Here is the current market sentiment data I gathered for you:
+
+```json
+{sentiment_text}
+```
+
+Use this data in your analysis."""
+
+        # Send thinking message
         await websocket.send_json(
             {
                 "message_type": "research",
                 "type": "thinking",
-                "content": "Analyzing market conditions...",
+                "content": "Analyzing market data and trends...",
             }
         )
 
-        # First sample to see if it wants to call a tool
-        response = chat.sample()
-
-        # Handle tool calls
-        if response.tool_calls:
-            for tool_call in response.tool_calls:
-                if tool_call.function.name == "get_market_sentiment":
-                    args = json.loads(tool_call.function.arguments)
-                    print(
-                        f"Grok requested tool execution: get_market_sentiment({args})"
-                    )
-
-                    # Send thinking update
-                    await websocket.send_json(
-                        {
-                            "message_type": "research",
-                            "type": "thinking",
-                            "content": f"Fetching market sentiment data...",
-                        }
-                    )
-
-                    # Call the actual function
-                    sentiment_data = get_market_sentiment(**args)
-
-                    # Add result to chat
-                    chat.append(
-                        tool_result(
-                            tool_call_id=tool_call.id,
-                            content=json.dumps(sentiment_data),
-                        )
-                    )
-
-                elif tool_call.function.name == "fetch_grokipedia_article":
-                    args = json.loads(tool_call.function.arguments)
-                    print(
-                        f"Grok requested tool execution: fetch_grokipedia_article({args})"
-                    )
-
-                    # Send thinking update
-                    await websocket.send_json(
-                        {
-                            "message_type": "research",
-                            "type": "thinking",
-                            "content": f"Fetching Grokipedia article for {args.get('topic')}...",
-                        }
-                    )
-
-                    # Call the actual function
-                    article_data = fetch_grokipedia_article(**args)
-
-                    # Add result to chat
-                    chat.append(
-                        tool_result(
-                            tool_call_id=tool_call.id,
-                            content=json.dumps(article_data),
-                        )
-                    )
-
-            # Send thinking update
-            await websocket.send_json(
+        # Create streaming chat completion
+        stream = await client.chat.completions.create(
+            model="grok-2-1212",
+            messages=[
                 {
-                    "message_type": "research",
-                    "type": "thinking",
-                    "content": "Processing sentiment data and generating report...",
-                }
-            )
-
-            # Get final response after tool output
-            response = chat.sample()
-
-        report = response.content
-
-        # Stream the report content
-        await websocket.send_json(
-            {"message_type": "research", "type": "report", "content": report}
+                    "role": "system",
+                    "content": "You are a helpful assistant that analyzes prediction markets.",
+                },
+                {"role": "user", "content": prompt_with_data},
+            ],
+            stream=True,
+            temperature=0.7,
         )
+
+        # Stream the response
+        full_response = ""
+        async for chunk in stream:
+            if chunk.choices and len(chunk.choices) > 0:
+                delta = chunk.choices[0].delta
+                content = delta.content
+
+                if content:
+                    full_response += content
+                    # Send text delta to client
+                    await websocket.send_json(
+                        {"message_type": "research", "type": "delta", "content": content}
+                    )
 
         # Extract recommendation from report
         recommendation = "NOOP"
-        if "RECOMMENDATION: YES" in report.upper():
+        if "RECOMMENDATION: YES" in full_response.upper():
             recommendation = "YES"
-        elif "RECOMMENDATION: NO" in report.upper():
+        elif "RECOMMENDATION: NO" in full_response.upper():
             recommendation = "NO"
 
         # Send completion with recommendation
@@ -197,8 +167,11 @@ Additionally, here are some custom user instructions to focus on:
         print(f"✅ Research complete: {recommendation}")
 
     except Exception as e:
+        import traceback
         error_msg = str(e)
+        traceback_str = traceback.format_exc()
         print(f"❌ Research error: {error_msg}")
+        print(f"Traceback:\n{traceback_str}")
         await websocket.send_json(
             {
                 "message_type": "research",
@@ -217,8 +190,6 @@ async def research_followup(websocket, messages: list[dict]):
         websocket: FastAPI WebSocket connection
         messages: Conversation history including original report and follow-up questions
     """
-    client = Client(api_key=os.getenv("XAI_API_KEY"))
-
     try:
         # Send thinking message
         await websocket.send_json(
@@ -229,62 +200,41 @@ async def research_followup(websocket, messages: list[dict]):
             }
         )
 
-        # Initialize chat
-        chat = client.chat.create(
-            model="grok-4-1-fast-non-reasoning",
-            tools=[get_market_sentiment_tool],
-            tool_choice="auto",
-        )
-
-        # Add system message
-        chat.append(
-            system(
-                "You are a helpful assistant that analyzes prediction markets. "
+        # Build conversation with system message + history
+        conversation = [
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that analyzes prediction markets. "
                 "You previously provided a research report. Now answer follow-up questions "
                 "about that report, provide clarifications, or respond to challenges."
-            )
+            }
+        ] + messages
+
+        # Create streaming chat completion
+        stream = await client.chat.completions.create(
+            model="grok-2-1212",
+            messages=conversation,
+            stream=True,
+            temperature=0.7,
         )
 
-        # Build conversation context
-        # Format: [{"role": "user|assistant", "content": "..."}]
-        for msg in messages:
-            if msg["role"] == "user":
-                chat.append(user(msg["content"]))
-            # Note: xai_sdk doesn't have a simple way to add assistant messages
-            # The conversation context is maintained through the messages list
+        # Stream the response
+        full_response = ""
+        async for chunk in stream:
+            if chunk.choices and len(chunk.choices) > 0:
+                delta = chunk.choices[0].delta
+                content = delta.content
 
-        # Get response
-        response = chat.sample()
-
-        # Handle tool calls if any
-        if response.tool_calls:
-            for tool_call in response.tool_calls:
-                if tool_call.function.name == "get_market_sentiment":
-                    args = json.loads(tool_call.function.arguments)
+                if content:
+                    full_response += content
+                    # Send text delta to client
                     await websocket.send_json(
                         {
                             "message_type": "research_followup",
-                            "type": "thinking",
-                            "content": "Fetching additional market data...",
+                            "type": "delta",
+                            "content": content
                         }
                     )
-                    sentiment_data = get_market_sentiment(**args)
-                    chat.append(
-                        tool_result(
-                            tool_call_id=tool_call.id, content=json.dumps(sentiment_data)
-                        )
-                    )
-
-            response = chat.sample()
-
-        # Stream the response
-        await websocket.send_json(
-            {
-                "message_type": "research_followup",
-                "type": "response",
-                "content": response.content,
-            }
-        )
 
         # Send completion
         await websocket.send_json(

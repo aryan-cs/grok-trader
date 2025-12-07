@@ -80,6 +80,57 @@
   line-height: 1.4;
 }
 
+.grok-market-selector {
+  margin: 8px 0 0 0;
+}
+
+.grok-market-select {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--polymarket-border);
+  color: var(--polymarket-text-secondary);
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 400;
+  padding: 8px 12px;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%239ca3af' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.grok-market-select:hover:not(:disabled) {
+  border-color: var(--polymarket-accent);
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+.grok-market-select:focus {
+  border-color: var(--polymarket-accent);
+  background-color: rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.grok-market-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.grok-market-select option {
+  background: var(--polymarket-surface);
+  color: var(--polymarket-text);
+  padding: 8px;
+}
+
+.grok-market-select option:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
 .grok-collapse-btn {
   background: transparent;
   border: none;
@@ -299,6 +350,79 @@
   line-height: 1.5;
 }
 
+/* Markdown styling */
+.grok-chat-message-content p {
+  margin: 0 0 8px 0;
+}
+
+.grok-chat-message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.grok-chat-message-content h1,
+.grok-chat-message-content h2,
+.grok-chat-message-content h3,
+.grok-chat-message-content h4 {
+  margin: 12px 0 8px 0;
+  font-weight: 600;
+}
+
+.grok-chat-message-content h1 { font-size: 18px; }
+.grok-chat-message-content h2 { font-size: 16px; }
+.grok-chat-message-content h3 { font-size: 15px; }
+.grok-chat-message-content h4 { font-size: 14px; }
+
+.grok-chat-message-content ul,
+.grok-chat-message-content ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.grok-chat-message-content li {
+  margin: 4px 0;
+}
+
+.grok-chat-message-content code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+}
+
+.grok-chat-message-content pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.grok-chat-message-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.grok-chat-message-content blockquote {
+  border-left: 3px solid var(--polymarket-border);
+  padding-left: 12px;
+  margin: 8px 0;
+  color: var(--polymarket-text-secondary);
+}
+
+.grok-chat-message-content a {
+  color: var(--polymarket-accent);
+  text-decoration: none;
+}
+
+.grok-chat-message-content a:hover {
+  text-decoration: underline;
+}
+
+.grok-chat-message-content strong {
+  font-weight: 600;
+}
+
 .grok-chat-input-container {
   display: flex;
   gap: 8px;
@@ -352,12 +476,258 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  height: 100%;
 }
 
 .grok-deep-research .grok-section {
   border: none;
   background: transparent;
   padding: 8px 0;
+}
+
+.grok-research-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 16px;
+}
+
+.grok-research-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.grok-research-thinking {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid var(--polymarket-border);
+  border-radius: 8px;
+}
+
+.grok-thinking-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.grok-spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--polymarket-border);
+  border-top-color: var(--polymarket-accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.grok-thinking-text {
+  flex: 1;
+  font-size: 14px;
+  color: var(--polymarket-text-secondary);
+  line-height: 1.5;
+}
+
+.grok-research-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  gap: 16px;
+}
+
+.grok-research-loading p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--polymarket-text-secondary);
+}
+
+.grok-research-report {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--polymarket-border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 8px;
+}
+
+.grok-report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--polymarket-border);
+}
+
+.grok-report-header h4 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--polymarket-text);
+}
+
+.grok-recommendation-badge {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.grok-recommendation-badge.grok-recommendation-yes {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--polymarket-success);
+  border: 1px solid var(--polymarket-success);
+}
+
+.grok-recommendation-badge.grok-recommendation-no {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--polymarket-danger);
+  border: 1px solid var(--polymarket-danger);
+}
+
+.grok-recommendation-badge.grok-recommendation-noop {
+  background: rgba(156, 163, 175, 0.2);
+  color: var(--polymarket-text-secondary);
+  border: 1px solid var(--polymarket-text-secondary);
+}
+
+.grok-report-body {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--polymarket-text);
+}
+
+/* Markdown spacing adjustments */
+.grok-report-body p,
+.grok-chat-message-content p {
+  margin: 0 0 8px 0;
+}
+
+.grok-report-body p:last-child,
+.grok-chat-message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.grok-report-body ul,
+.grok-report-body ol,
+.grok-chat-message-content ul,
+.grok-chat-message-content ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.grok-report-body li,
+.grok-chat-message-content li {
+  margin: 4px 0;
+}
+
+.grok-report-body h1,
+.grok-report-body h2,
+.grok-report-body h3,
+.grok-report-body h4,
+.grok-report-body h5,
+.grok-report-body h6,
+.grok-chat-message-content h1,
+.grok-chat-message-content h2,
+.grok-chat-message-content h3,
+.grok-chat-message-content h4,
+.grok-chat-message-content h5,
+.grok-chat-message-content h6 {
+  margin: 12px 0 8px 0;
+  font-weight: 600;
+}
+
+.grok-report-body h1:first-child,
+.grok-report-body h2:first-child,
+.grok-report-body h3:first-child,
+.grok-chat-message-content h1:first-child,
+.grok-chat-message-content h2:first-child,
+.grok-chat-message-content h3:first-child {
+  margin-top: 0;
+}
+
+.grok-report-body code,
+.grok-chat-message-content code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.grok-report-body pre,
+.grok-chat-message-content pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.grok-report-body pre code,
+.grok-chat-message-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.grok-research-input-container {
+  display: flex;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--polymarket-border);
+  margin-top: auto;
+}
+
+.grok-research-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--polymarket-border);
+  color: var(--polymarket-text);
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.grok-research-input:focus {
+  border-color: var(--polymarket-accent);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.grok-research-input::placeholder {
+  color: var(--polymarket-text-secondary);
+}
+
+.grok-research-send {
+  background: var(--polymarket-accent);
+  border: none;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.grok-research-send:hover:not(:disabled) {
+  background: var(--polymarket-accent-hover);
+}
+
+.grok-research-send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .grok-deep-research-description {

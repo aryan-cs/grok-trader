@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 const Chat = ({ websocket, clientId, eventSlug, chatMessages, setChatMessages }) => {
   const [chatInput, setChatInput] = useState('');
@@ -147,7 +148,7 @@ const Chat = ({ websocket, clientId, eventSlug, chatMessages, setChatMessages })
             {chatMessages.map((msg, idx) => (
               <div key={idx} className={`grok-chat-message ${msg.role}`}>
                 <div className="grok-chat-message-content">
-                  {msg.content}
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
                   {isStreaming && idx === chatMessages.length - 1 && msg.role === 'assistant' && (
                     <span className="grok-streaming-cursor">▊</span>
                   )}
