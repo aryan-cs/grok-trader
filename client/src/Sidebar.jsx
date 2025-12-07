@@ -7,6 +7,8 @@ const Sidebar = () => {
   const [wsStatus, setWsStatus] = useState('connecting');
   const [eventSlug, setEventSlug] = useState(null);
   const [activeTab, setActiveTab] = useState('feed');
+  const [chatMessages, setChatMessages] = useState([]);
+  const [clientId] = useState(() => `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
   const wsRef = useRef(null);
 
   // Extract event slug from URL and connect to WebSocket
@@ -44,6 +46,13 @@ const Sidebar = () => {
       ws.onopen = () => {
         console.log('✅ WebSocket connected to ws://localhost:8765/ws');
         setWsStatus('connected');
+
+        // Register client ID
+        ws.send(JSON.stringify({
+          type: 'register',
+          client_id: clientId
+        }));
+        console.log('📝 Registering client:', clientId);
 
         // Send event slug to server
         if (slug) {
@@ -128,6 +137,9 @@ const Sidebar = () => {
                 ›
               </button>
             </div>
+            {eventSlug && (
+              <p className="grok-event-slug">{eventSlug}</p>
+            )}
           </div>
 
           <div className="grok-tabs">
@@ -178,7 +190,15 @@ const Sidebar = () => {
               </>
             )}
 
-            {activeTab === 'chat' && <Chat />}
+            {activeTab === 'chat' && (
+              <Chat
+                websocket={wsRef.current}
+                clientId={clientId}
+                eventSlug={eventSlug}
+                chatMessages={chatMessages}
+                setChatMessages={setChatMessages}
+              />
+            )}
 
             {activeTab === 'research' && (
               <div className="grok-section">
