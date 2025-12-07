@@ -2,7 +2,14 @@ import json
 import os
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    field_validator,
+    model_validator,
+    ConfigDict,
+    ValidationError,
+)
 from xai_sdk import Client
 from xai_sdk.chat import system, user
 from xai_sdk.tools import web_search, x_search
@@ -91,12 +98,40 @@ def produce_trading_decision(
         }
 
     class Decision(BaseModel):
+        model_config = ConfigDict(extra="allow", populate_by_name=True)
+
         action: str = Field(description="buy, sell, or hold")
         outcome: str = Field(description="yes or no side when trading")
         price: float = Field(description="limit price between 0 and 1 inclusive")
         size: float = Field(
             description="IOC size in contracts, must not exceed max_size"
         )
+
+        @model_validator(mode="before")
+        @classmethod
+        def _coerce_aliases(cls, values):
+            if not isinstance(values, dict):
+                return values
+            v = dict(values)
+            # outcome alias
+            if "outcome" not in v and "side" in v:
+                v["outcome"] = v.get("side")
+            # price aliases
+            if "price" not in v:
+                if "limit_price" in v:
+                    v["price"] = v["limit_price"]
+                elif "price_cents" in v:
+                    try:
+                        v["price"] = float(v["price_cents"]) / 100
+                    except Exception:
+                        pass
+            # size aliases
+            if "size" not in v:
+                for k in ("quantity", "amount", "shares"):
+                    if k in v:
+                        v["size"] = v[k]
+                        break
+            return v
 
         @field_validator("action")
         @classmethod
@@ -200,7 +235,17 @@ def produce_trading_decision(
         )
     )
 
-    response, parsed = chat.parse(Decision)
+    try:
+        response, parsed = chat.parse(Decision)
+    except ValidationError as ve:
+        fallback = chat.sample()
+        raw = getattr(fallback, "content", "")
+        try:
+            data = json.loads(raw)
+            parsed = Decision.model_validate(data)
+            response = fallback
+        except Exception:
+            raise ve
 
     action = parsed.action.lower()
     outcome = parsed.outcome.lower()

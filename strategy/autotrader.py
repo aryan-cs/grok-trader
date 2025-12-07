@@ -10,6 +10,7 @@ if __package__ is None:
 from strategy.polymarket import Polymarket
 from strategy.tweets import TweetFeed
 from strategy.brain import produce_trading_decision
+from strategy.account import create_client_from_env, place_order, get_orders
 
 
 class Strategy:
@@ -27,6 +28,19 @@ class Strategy:
         self.tweets = deque(maxlen=10)
         self.tweet_ids: set[int] = set()
         self._last_decision_ts = 0.0
+        self.client = None
+        self.funder = os.environ.get("POLY_FUNDER_ADDRESS")
+        self.signature_type = (
+            int(os.environ["POLY_SIGNATURE_TYPE"])
+            if os.environ.get("POLY_SIGNATURE_TYPE") is not None
+            else None
+        )
+        try:
+            self.client = create_client_from_env(
+                funder_override=self.funder, signature_type=self.signature_type
+            )
+        except Exception as e:
+            print(f"[account][error] {e}")
 
     def on_new_post(self, tweet):
         tweet_id = tweet.get("tweet_id")
@@ -41,9 +55,16 @@ class Strategy:
             self.tweet_ids.discard(oldest.get("tweet_id"))
 
     def on_new_book(self, yes_book, no_book):
-        print(
-            f"[{self.market_slug}] {yes_book.best_bid(1)}@{yes_book.best_ask(1)} || {no_book.best_bid(1)}@{no_book.best_ask(1)}"
-        )
+        def fmt(book):
+            if not book:
+                return "—"
+            bid = book.best_bid(1)
+            ask = book.best_ask(1)
+            bid_s = f"{bid[0][0]:.4f}@{bid[0][1]:.0f}" if bid else "—"
+            ask_s = f"{ask[0][0]:.4f}@{ask[0][1]:.0f}" if ask else "—"
+            return f"{book.side}:{bid_s}/{ask_s}"
+
+        print(f"[{self.market_slug}] {fmt(yes_book)} || {fmt(no_book)}")
 
         self.yes_book = yes_book
         self.no_book = no_book
@@ -57,8 +78,17 @@ class Strategy:
             return
         self._last_decision_ts = now
 
-        # produce tradng decision
+        # produce trading decision
         try:
+            # refresh positions via open orders snapshot
+            if self.client:
+                try:
+                    yes_pos = get_orders(self.client, asset_id=yes_book.asset_id) or []
+                    no_pos = get_orders(self.client, asset_id=no_book.asset_id) or []
+                    self.positions = yes_pos + no_pos
+                except Exception as e:
+                    print(f"[positions][error] {e}")
+
             decision = produce_trading_decision(
                 self.max_size,
                 self.max_position,
@@ -69,6 +99,44 @@ class Strategy:
                 list(self.tweets),
             )
             print(f"[decision][{self.market_slug}] {decision}")
+
+            if self.client and decision.action != "hold" and decision.size > 0:
+                token_id = (
+                    self.yes_book.asset_id
+                    if decision.outcome == "yes"
+                    else self.no_book.asset_id
+                )
+
+                # don't allow selling flat
+                if decision.action == "sell" and not self.positions:
+                    print(
+                        "[order][skip] No inventory tracked; skipping sell while flat."
+                    )
+                    return
+
+                try:
+                    order_resp = place_order(
+                        client=self.client,
+                        token_id=token_id,
+                        side=decision.action,
+                        price=decision.price,
+                        size=decision.size,
+                    )
+                    print(f"[order][placed] {order_resp}")
+                except Exception as e:
+                    print(f"[order][error] {e}")
+
+            if self.client:
+                try:
+                    yes_open = get_orders(self.client, asset_id=yes_book.asset_id) or []
+                    no_open = get_orders(self.client, asset_id=no_book.asset_id) or []
+                    print(f"[open_orders] yes={len(yes_open)} no={len(no_open)}")
+                    if yes_open:
+                        print(f"  yes_open: {yes_open}")
+                    if no_open:
+                        print(f"  no_open: {no_open}")
+                except Exception as e:
+                    print(f"[open_orders][error] {e}")
         except Exception as e:
             print(f"[decision][error] {e}")
 
