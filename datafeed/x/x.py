@@ -352,22 +352,22 @@ def main():
         full_archive=True
     )
     
-    fetch_tweets(
-        # usernames=["elonmusk"],
-        keywords=["dildo", "wnba", "court"],
-        start_time="2025-05-03T00:00:00Z",
-        end_time="2025-09-25T00:00:00Z",
-        max_results=MIN_TWEETS,
-        full_archive=True
-    )
+    # fetch_tweets(
+    #     # usernames=["elonmusk"],
+    #     keywords=["dildo", "wnba", "court"],
+    #     start_time="2025-05-03T00:00:00Z",
+    #     end_time="2025-09-25T00:00:00Z",
+    #     max_results=MIN_TWEETS,
+    #     full_archive=True
+    # )
     
-    fetch_tweets(
-        usernames=["F1",  "Drivers", "Champion"],
-        # start_time="2025-03-03T00:00:00Z",
-        # end_time="2025-04-25T00:00:00Z",
-        max_results=MIN_TWEETS,
-        full_archive=True
-    )
+    # fetch_tweets(
+    #     usernames=["F1",  "Drivers", "Champion"],
+    #     # start_time="2025-03-03T00:00:00Z",
+    #     # end_time="2025-04-25T00:00:00Z",
+    #     max_results=MIN_TWEETS,
+    #     full_archive=True
+    # )
 
 if __name__ == "__main__":
     main()

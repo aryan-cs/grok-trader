@@ -151,7 +151,7 @@ def fetch_articles(keywords=None, limit=10):
     except Exception as e:
         console.print(f"[bold red]An error occurred:[/bold red] {e}")
 
-def get_articles_from_csv(keywords=None, start_time=None, end_time=None, logic="AND"):
+def load_articles(keywords=None, start_time=None, end_time=None, logic="AND"):
     """
     Retrieves articles from the CSV file based on filtering criteria.
     Returns a list of dictionaries.
