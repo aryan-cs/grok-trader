@@ -184,7 +184,7 @@ def main():
 
     console.print(f"Loaded {len(all_items)} items for processing.")
 
-    test_market = "Will AI take over the world?"
+    test_market = "Will Fed cut rates in 2025?"
     results = run_analysis(all_items, test_market)
 
     display_analysis(results)
