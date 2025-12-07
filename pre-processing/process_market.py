@@ -83,7 +83,6 @@ def get_market_sentiment(market: str = None, contracts: list = None, start_date:
         keywords = []
         subreddits = []
         
-        # Only generate keywords if we have a specific market
         if market:
             if verbose:
                 print("Generating search terms with Grok...")
@@ -95,27 +94,21 @@ def get_market_sentiment(market: str = None, contracts: list = None, start_date:
                 print(f"Keywords: {keywords}")
                 print(f"Subreddits: {subreddits}")
         
-        # Fetch Tweets
-        # If we have accounts, we can fetch even without keywords
         if keywords or accounts:
             if verbose:
                 print("Fetching fresh Tweets...")
             try:
-                # If accounts are provided, fetch from them (possibly without keywords)
                 if accounts:
                     fetched = fetch_tweets(keywords=keywords, usernames=accounts, start_time=start_date, end_time=end_date, max_results=limit)
                     if fetched:
                         tweets.extend(fetched)
                 
-                # If we have keywords, also do a general search (unless we only want account feed)
-                # If market is None, we probably only want account feed if accounts are provided.
                 if keywords:
                     if accounts and verbose:
                         print("Fetching general Tweets (crowd sentiment)...")
                     
                     fetched_general = fetch_tweets(keywords=keywords, start_time=start_date, end_time=end_date, max_results=limit)
                     if fetched_general:
-                        # Avoid duplicates if any
                         existing_ids = {t['link'] for t in tweets}
                         for t in fetched_general:
                             if t['link'] not in existing_ids:
@@ -123,7 +116,6 @@ def get_market_sentiment(market: str = None, contracts: list = None, start_date:
             except Exception as e:
                 print(f"Error fetching tweets: {e}")
 
-        # Fetch Reddit/Reuters only if we have keywords (requires topic)
         if keywords:
             if verbose:
                 print("Fetching fresh Reddit posts...")
@@ -163,7 +155,6 @@ def get_market_sentiment(market: str = None, contracts: list = None, start_date:
         if verbose:
             print(f"[{i+1}/{len(items)}] Analyzing item from {item['source']}...")
 
-        # If market is None, analyze_text should handle it (e.g. generic financial analysis)
         analysis = analyze_text(item['text'], item['source'], market=market)
         
         if analysis.get('is_useful'):

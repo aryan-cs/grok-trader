@@ -17,22 +17,17 @@ load_dotenv()
 CSV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "grokipedia_data.csv")
 console = Console()
 
-# Use a model good for knowledge retrieval/generation
 MODEL_NAME = "grok-4-1-fast-non-reasoning" 
 
 def save_to_csv(topic, content, timestamp):
     file_exists = os.path.isfile(CSV_FILE)
     
-    # Check for duplicates (simple check based on topic)
     if file_exists:
         try:
             with open(CSV_FILE, mode='r', encoding='utf-8') as file:
                 reader = csv.DictReader(file)
                 for row in reader:
                     if row.get("topic") == topic:
-                        # We could update, but for now let's just return (or maybe we want fresh info?)
-                        # If we want fresh info, we should probably append new entries or update.
-                        # Let's append for history, but maybe we want to return the latest.
                         pass
         except Exception:
             pass
@@ -53,7 +48,6 @@ def fetch_grokipedia_article(topic: str, verbose: bool = False):
     if verbose:
         console.print(f"[bold yellow]Consulting Grokipedia for:[/bold yellow] '{topic}'...")
 
-    # Try scraping first
     url = f"https://grokipedia.com/page/{topic.replace(' ', '_')}"
     scraped_content = None
     
@@ -64,24 +58,19 @@ def fetch_grokipedia_article(topic: str, verbose: bool = False):
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            # Try to find the main content
             content_div = soup.find('article') or \
                           soup.find('div', {'id': 'content'}) or \
                           soup.find('div', {'class': 'mw-parser-output'}) or \
                           soup.body
             
             if content_div:
-                # Remove unwanted tags
                 for element in content_div(['script', 'style', 'nav', 'footer', 'header', 'aside']):
                     element.decompose()
 
-                # Get text with single newline separator to preserve paragraph structure but avoid excessive spacing
                 text = content_div.get_text(separator='\n', strip=True)
                 
-                # Remove citation markers like [1], [153], etc.
                 text = re.sub(r'\[\d+\]', '', text)
                 
-                # Collapse multiple newlines into max two (paragraph breaks)
                 text = re.sub(r'\n{3,}', '\n\n', text)
                 
                 scraped_content = text.strip()
@@ -108,7 +97,6 @@ def fetch_grokipedia_article(topic: str, verbose: bool = False):
             "source": "Grokipedia.com"
         }
 
-    # Fallback to Grok generation
     if verbose:
         console.print("[yellow]Article not found on Web. Generating with Grok...[/yellow]")
 
@@ -176,5 +164,4 @@ get_grokipedia_article_tool = tool(
 )
 
 if __name__ == "__main__":
-    # Test
     fetch_grokipedia_article("Prediction market", verbose=True)

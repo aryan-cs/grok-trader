@@ -93,7 +93,6 @@ if __name__ == "__main__":
     markets_to_watch = args.markets
     if not markets_to_watch:
         if args.account_list:
-            # If account list is enabled and no markets provided, use a generic feed
             markets_to_watch = [None]
         else:
             markets_to_watch = [
