@@ -209,6 +209,46 @@ const AutoTrade = ({ eventSlug, selectedMarket, clientId }) => {
         </div>
       )}
 
+      {/* Trade History */}
+      {!loading && autoTrade && autoTrade.trades && autoTrade.trades.length > 0 && (
+        <div className="grok-section">
+          <h4 className="grok-trade-history-title">Trade History</h4>
+          <div className="grok-trade-history-list">
+            {[...autoTrade.trades].reverse().map((trade, idx) => {
+              const isBuy = trade.action.toLowerCase() === 'buy';
+              const date = new Date(trade.timestamp);
+              const timeStr = date.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+              });
+              const dateStr = date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric'
+              });
+
+              return (
+                <div key={idx} className={`grok-trade-item ${isBuy ? 'trade-buy' : 'trade-sell'}`}>
+                  <div className="grok-trade-action">
+                    <span className={`grok-trade-badge ${isBuy ? 'badge-buy' : 'badge-sell'}`}>
+                      {isBuy ? 'BUY' : 'SELL'}
+                    </span>
+                  </div>
+                  <div className="grok-trade-details">
+                    <div className="grok-trade-amount">
+                      ${trade.amount.toFixed(2)}
+                    </div>
+                    <div className="grok-trade-time">
+                      {dateStr} • {timeStr}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {!loading && !autoTrade && (
         <form onSubmit={handleSubmit}>
           <div className="grok-section">

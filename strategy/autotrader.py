@@ -15,13 +15,14 @@ from strategy.account import create_client_from_env, place_order, get_orders
 
 class Strategy:
     def __init__(
-        self, market_slug, condition, max_size, max_position=None, positions=None
+        self, market_slug, condition, max_size, max_position=None, positions=None, autotrade=None
     ):
         self.market_slug = market_slug
         self.condition = condition
         self.max_size = max_size
         self.max_position = max_position if max_position is not None else max_size
         self.positions = positions or []
+        self.autotrade = autotrade  # AutoTrade object for logging trades
 
         self.yes_book = None
         self.no_book = None
@@ -143,6 +144,36 @@ class Strategy:
                         size=decision.size,
                     )
                     print(f"[order][placed] {order_resp}")
+
+                    # Log trade to AutoTrade if available
+                    if self.autotrade:
+                        trade_amount = decision.price * decision.size
+                        trade = self.autotrade.log_trade(
+                            action=decision.action,  # "buy" or "sell"
+                            amount=trade_amount
+                        )
+                        print(f"[autotrade][logged] {decision.action} ${trade_amount:.2f}")
+                        print(f"[autotrade][pnl] ${self.autotrade.pnl:.2f}")
+                        print(f"[autotrade][holdings] ${self.autotrade.holdings_cost:.2f}")
+
+                        # Send WebSocket update if available
+                        if self.autotrade.websocket:
+                            import asyncio
+                            try:
+                                asyncio.create_task(self.autotrade.websocket.send_json({
+                                    "message_type": "autotrade",
+                                    "type": "trade_executed",
+                                    "autotrade_id": self.autotrade.id,
+                                    "trade": {
+                                        "action": trade.action,
+                                        "amount": trade.amount,
+                                        "timestamp": trade.timestamp.isoformat(),
+                                    },
+                                    "pnl": self.autotrade.pnl,
+                                    "holdings_cost": self.autotrade.holdings_cost
+                                }))
+                            except Exception as ws_error:
+                                print(f"[websocket][error] {ws_error}")
                 except Exception as e:
                     print(f"[order][error] {e}")
 
@@ -159,6 +190,68 @@ class Strategy:
                     print(f"[open_orders][error] {e}")
         except Exception as e:
             print(f"[decision][error] {e}")
+
+
+def start_strategy_autotrader(autotrade):
+    """
+    Start the full autotrader strategy with an AutoTrade object.
+
+    Args:
+        autotrade: AutoTrade object from autotrade_orm.py
+
+    Returns:
+        tuple: (polymarket_feed, tweet_feed) for cleanup
+    """
+    print(f"🚀 Starting strategy autotrader for {autotrade.market_slug}")
+    print(f"   Event: {autotrade.event_slug}")
+    print(f"   Condition: {autotrade.condition}")
+    print(f"   Amount: ${autotrade.amount}")
+    print(f"   Limit: {autotrade.limit}")
+
+    # Convert dollar amount to size (number of contracts)
+    # Assuming price around limit, size = amount / limit
+    max_size = int(autotrade.amount / autotrade.limit) if autotrade.limit > 0 else 10
+    max_position = max_size
+
+    # Create strategy with AutoTrade object
+    strategy = Strategy(
+        market_slug=autotrade.market_slug,
+        condition=autotrade.condition,
+        max_size=max_size,
+        max_position=max_position,
+        autotrade=autotrade
+    )
+
+    # Start Polymarket feed
+    polymarket_feed = Polymarket(
+        autotrade.event_slug,
+        strategy=strategy,
+        market_slug=autotrade.market_slug
+    )
+
+    # Start tweet feed
+    tweet_feed = TweetFeed(
+        market_slug=autotrade.market_slug,
+        min_likes=5,
+        strategy=strategy,
+        poll_interval=30,
+        max_results=20,
+    )
+
+    def poll_tweets():
+        while True:
+            try:
+                tweet_feed.run_once()
+            except Exception as e:
+                print(f"[tweets] error: {e}")
+            time.sleep(tweet_feed.poll_interval)
+
+    # Start tweet polling in background
+    threading.Thread(target=poll_tweets, daemon=True).start()
+
+    print("✅ Strategy autotrader started successfully")
+
+    return polymarket_feed, tweet_feed
 
 
 if __name__ == "__main__":

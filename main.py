@@ -9,7 +9,7 @@ from grok_research import research_market, research_followup
 from polymarket.asset_id import fetch_event_market_slugs
 from polymarket.feed import PolymarketFeed
 from autotrade_orm import AutoTrade
-from autotrader import start_autotrader
+from strategy.autotrader import start_strategy_autotrader
 
 app = FastAPI()
 
@@ -30,7 +30,7 @@ websocket_connections: dict[str, WebSocket] = {}
 active_autotrades: dict[str, AutoTrade] = {}  # market_slug -> AutoTrade object
 
 # Store running autotrader feeds by market slug
-active_feeds: dict[str, PolymarketFeed] = {}  # market_slug -> PolymarketFeed
+active_feeds: dict[str, tuple] = {}  # market_slug -> (polymarket_feed, tweet_feed)
 
 
 class ChatRequest(BaseModel):
@@ -244,13 +244,15 @@ async def start_autotrade(request: AutoTradeRequest, background_tasks: Backgroun
     # Store in active auto trades
     active_autotrades[request.market_slug] = auto_trade
 
-    # Start the autotrader in background
+    # Start the strategy autotrader in background
     try:
-        feed = start_autotrader(auto_trade)
-        active_feeds[request.market_slug] = feed
-        print(f"✓ Started autotrader for {request.market_slug}")
+        polymarket_feed, tweet_feed = start_strategy_autotrader(auto_trade)
+        active_feeds[request.market_slug] = (polymarket_feed, tweet_feed)
+        print(f"✓ Started strategy autotrader for {request.market_slug}")
     except Exception as e:
+        import traceback
         print(f"❌ Failed to start autotrader: {e}")
+        traceback.print_exc()
         # Clean up on failure
         del active_autotrades[request.market_slug]
         return {
@@ -347,18 +349,22 @@ async def stop_autotrade(auto_trade_id: str):
             "message": "Auto trade not found",
         }
 
-    # Stop the autotrader feed if running
+    # Stop the autotrader feeds if running
     if market_to_remove in active_feeds:
         try:
-            feed = active_feeds[market_to_remove]
-            # Close the websocket connection
-            if feed.ws:
-                feed.ws.close()
-                print(f"✓ Closed websocket for {market_to_remove}")
+            polymarket_feed, tweet_feed = active_feeds[market_to_remove]
+
+            # Close the polymarket feed
+            if hasattr(polymarket_feed, 'close'):
+                polymarket_feed.close()
+                print(f"✓ Closed polymarket feed for {market_to_remove}")
+
+            # Tweet feed runs in daemon thread, will stop automatically
+
             del active_feeds[market_to_remove]
-            print(f"✓ Stopped autotrader feed for {market_to_remove}")
+            print(f"✓ Stopped autotrader feeds for {market_to_remove}")
         except Exception as e:
-            print(f"⚠️ Error stopping feed: {e}")
+            print(f"⚠️ Error stopping feeds: {e}")
 
     # Remove from active trades
     del active_autotrades[market_to_remove]
