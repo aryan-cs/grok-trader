@@ -13,7 +13,7 @@ from rich import box
 load_dotenv()
 
 BEARER_TOKEN = os.getenv("X_BEARER_TOKEN")
-USE_TEST_DATA = True
+USE_TEST_DATA = False
 CSV_FILE = "tweets_data.csv"
 
 console = Console()
@@ -158,20 +158,76 @@ def load_from_csv():
             
         console.print(f"\n[bold green]Displayed {count} tweets from CSV.[/bold green]")
 
-def fetch_from_api():
+def build_query(keywords=None, usernames=None, logic="AND", min_likes=0, min_retweets=0, entities=None, lang="en"):
+    parts = []
+    
+    if keywords:
+        join_op = " OR " if logic.upper() == "OR" else " "
+        parts.append(f"({' '.join(keywords)})" if logic.upper() == "AND" else f"({' OR '.join(keywords)})")
+            
+    if usernames:
+        user_queries = [f"from:{u}" for u in usernames]
+        parts.append(f"({' OR '.join(user_queries)})")
+        
+    if entities:
+        entity_queries = [f'entity:"{e}"' for e in entities]
+        parts.append(f"({' OR '.join(entity_queries)})")
+        
+    if min_likes > 0:
+        parts.append(f"min_faves:{min_likes}")
+    if min_retweets > 0:
+        parts.append(f"min_retweets:{min_retweets}")
+        
+    parts.append(f"lang:{lang}")
+    parts.append("-is:retweet")
+    
+    return " ".join(parts)
+
+def fetch_tweets(keywords=None, 
+                 usernames=None, 
+                 start_time=None, 
+                 end_time=None, 
+                 logic="AND", 
+                 min_likes=0, 
+                 min_retweets=0, 
+                 entities=None, 
+                 max_results=10,
+                 full_archive=False):
+    """
+    Fetches tweets based on advanced criteria.
+    
+    Args:
+        keywords (list): List of keywords to search for.
+        usernames (list): List of usernames to search from.
+        start_time (str): ISO 8601 start time (e.g., "2023-12-01T00:00:00Z").
+        end_time (str): ISO 8601 end time.
+        logic (str): "AND" or "OR" for combining keywords.
+        min_likes (int): Minimum number of likes.
+        min_retweets (int): Minimum number of retweets.
+        entities (list): List of entities to search for.
+        max_results (int): Number of tweets to return (10-100).
+        full_archive (bool): Whether to search the full archive (required for tweets older than 7 days).
+    """
     if not BEARER_TOKEN:
         console.print("[bold red]Error:[/bold red] X_BEARER_TOKEN not found in .env file")
         return
 
     client = tweepy.Client(bearer_token=BEARER_TOKEN)
     
-    query = "Python -is:retweet"
-    console.print(f"[bold yellow]Searching for:[/bold yellow] {query}...\n")
+    query = build_query(keywords, usernames, logic, min_likes, min_retweets, entities)
+    console.print(f"[bold yellow]Generated Query:[/bold yellow] {query}\n")
 
     try:
-        response = client.search_recent_tweets(
+        # Select the appropriate endpoint
+        search_function = client.search_all_tweets if full_archive else client.search_recent_tweets
+        endpoint_name = "Full Archive Search" if full_archive else "Recent Search"
+        console.print(f"[dim]Using endpoint: {endpoint_name}[/dim]")
+
+        response = search_function(
             query=query, 
-            max_results=10,
+            start_time=start_time,
+            end_time=end_time,
+            max_results=max_results,
             tweet_fields=['created_at', 'public_metrics', 'lang', 'author_id'],
             expansions=['author_id'],
             user_fields=['username', 'name', 'public_metrics']
@@ -189,7 +245,7 @@ def fetch_from_api():
             
             console.print(f"\n[bold green]Success![/bold green] Saved {len(response.data)} tweets to {CSV_FILE}")
         else:
-            console.print("[bold red]No tweets found.[/bold red]")
+            console.print("[bold red]No tweets found matching criteria.[/bold red]")
 
     except Exception as e:
         console.print(f"[bold red]An error occurred:[/bold red] {e}")
@@ -198,7 +254,14 @@ def main():
     if USE_TEST_DATA:
         load_from_csv()
     else:
-        fetch_from_api()
+        # Fetch Elon Musk's tweets from March 3rd to April 25th, 2025
+        fetch_tweets(
+            usernames=["elonmusk"],
+            start_time="2025-03-03T00:00:00Z",
+            end_time="2025-04-25T00:00:00Z",
+            max_results=15,
+            full_archive=True
+        )
 
 if __name__ == "__main__":
     main()
