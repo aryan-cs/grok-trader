@@ -15,6 +15,7 @@ load_dotenv()
 BEARER_TOKEN = os.getenv("X_BEARER_TOKEN")
 USE_TEST_DATA = False
 CSV_FILE = "tweets_data.csv"
+MIN_TWEETS = 10; """ THIS IS AN API LIMITATION NOT DESIGN CHOICE """
 
 console = Console()
 
@@ -253,13 +254,6 @@ def fetch_tweets(keywords=None,
 def main():
     
     """
-    THIS IS AN API LIMITATION NOT DESIGN CHOICE
-    """
-    MIN_TWEETS = 10
-    
-    """
-    Fetches tweets based on advanced criteria.
-    
     Args:
         keywords (list): List of keywords to search for.
         usernames (list): List of usernames to search from.
