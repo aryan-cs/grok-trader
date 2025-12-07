@@ -42,6 +42,20 @@ class Strategy:
         except Exception as e:
             print(f"[account][error] {e}")
 
+    def _extract_reasoning(self, response):
+        if not response:
+            return None
+        content = getattr(response, "content", None)
+        if content:
+            return content
+        outputs = getattr(response, "outputs", None)
+        if outputs:
+            for out in outputs:
+                msg = getattr(out, "message", None)
+                if msg and getattr(msg, "content", None):
+                    return msg.content
+        return None
+
     def on_new_post(self, tweet):
         tweet_id = tweet.get("tweet_id")
         if tweet_id in self.tweet_ids:
@@ -100,7 +114,11 @@ class Strategy:
             )
             print(f"[decision][{self.market_slug}] {decision}")
             if decision.response:
-                print(f"[grok_response] {decision.response}")
+                reasoning = self._extract_reasoning(decision.response)
+                if reasoning:
+                    print(f"[grok_reasoning] {reasoning}")
+                else:
+                    print(f"[grok_response] {decision.response}")
 
             if self.client and decision.action != "hold" and decision.size > 0:
                 token_id = (
