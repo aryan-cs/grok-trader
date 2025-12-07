@@ -15,13 +15,14 @@ client = AsyncOpenAI(
 )
 
 
-async def stream_chat_response(messages: list[dict], websocket):
+async def stream_chat_response(messages: list[dict], websocket, market_slug: str | None = None):
     """
     Stream chat responses from xAI API to the client via WebSocket.
 
     Args:
         messages: List of chat messages with 'role' and 'content'
         websocket: FastAPI WebSocket connection to stream responses to
+        market_slug: Optional market slug to provide context to the chat
     """
     if not XAI_API_KEY:
         await websocket.send_json(
@@ -30,10 +31,20 @@ async def stream_chat_response(messages: list[dict], websocket):
         return
 
     try:
+        # Add system message with market context if market_slug is provided
+        messages_with_context = messages.copy()
+        if market_slug:
+            system_message = {
+                "role": "system",
+                "content": f"You are a helpful assistant answering questions about the Polymarket prediction market: '{market_slug}'. Provide relevant information and analysis about this specific market when asked."
+            }
+            # Insert system message at the beginning
+            messages_with_context.insert(0, system_message)
+
         # Create streaming chat completion
         stream = await client.chat.completions.create(
             model=MODEL_NAME,
-            messages=messages,
+            messages=messages_with_context,
             stream=True,
             temperature=0.7,
         )

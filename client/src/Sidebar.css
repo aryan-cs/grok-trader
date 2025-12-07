@@ -612,6 +612,17 @@
   animation: spin 0.6s linear infinite;
 }
 
+.grok-checkmark {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--polymarket-success);
+  font-weight: bold;
+}
+
 .grok-thinking-text {
   flex: 1;
   font-size: 14px;
@@ -811,6 +822,93 @@
 .grok-research-send:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Citations Styles */
+.grok-citations {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--polymarket-border);
+}
+
+.grok-citations-title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--polymarket-text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.grok-citations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.grok-citation-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--polymarket-border);
+  border-radius: 6px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  font-size: 13px;
+}
+
+.grok-citation-item:hover {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: var(--polymarket-accent);
+  transform: translateX(2px);
+}
+
+.grok-citation-number {
+  color: var(--polymarket-accent);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.grok-citation-source {
+  color: var(--polymarket-text);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+.grok-citation-author {
+  color: var(--polymarket-text-secondary);
+  font-size: 12px;
+  flex: 1;
+}
+
+.grok-citation-sentiment {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.grok-sentiment-positive {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--polymarket-success);
+  border: 1px solid var(--polymarket-success);
+}
+
+.grok-sentiment-negative {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--polymarket-danger);
+  border: 1px solid var(--polymarket-danger);
+}
+
+.grok-sentiment-neutral {
+  background: rgba(156, 163, 175, 0.2);
+  color: var(--polymarket-text-secondary);
+  border: 1px solid var(--polymarket-text-secondary);
 }
 
 .grok-deep-research-description {

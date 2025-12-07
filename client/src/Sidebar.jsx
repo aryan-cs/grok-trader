@@ -366,6 +366,7 @@ const Sidebar = () => {
                 websocket={wsRef.current}
                 clientId={clientId}
                 eventSlug={eventSlug}
+                selectedMarket={selectedMarket}
                 chatMessages={chatMessages}
                 setChatMessages={setChatMessages}
               />
