@@ -18,5 +18,4 @@ dependencies = [
     "bs4>=0.0.2",
     "polymarket>=0.1.2",
     "websocket-client>=1.9.0",
-    "py-clob-client>=0.30.0",
 ]
