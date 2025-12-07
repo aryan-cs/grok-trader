@@ -251,6 +251,80 @@ def fetch_tweets(keywords=None,
     except Exception as e:
         console.print(f"[bold red]An error occurred:[/bold red] {e}")
 
+def load_tweets(keywords=None, 
+                        usernames=None, 
+                        start_time=None, 
+                        end_time=None, 
+                        logic="AND", 
+                        min_likes=0, 
+                        min_retweets=0, 
+                        lang=None):
+    
+    if not os.path.exists(CSV_FILE):
+        console.print(f"[bold red]Error:[/bold red] {CSV_FILE} not found.")
+        return []
+
+    results = []
+    
+    # Parse date strings to datetime objects for comparison
+    start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00')) if start_time else None
+    end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00')) if end_time else None
+
+    with open(CSV_FILE, mode='r', encoding='utf-8') as file:
+        reader = csv.DictReader(file)
+        
+        for row in reader:
+            # Filter by Language
+            if lang and row.get("lang") != lang:
+                continue
+
+            # Filter by Usernames
+            if usernames:
+                if row.get("username", "").lower() not in [u.lower() for u in usernames]:
+                    continue
+
+            # Filter by Metrics
+            try:
+                likes = int(row.get("likes", 0))
+                retweets = int(row.get("retweets", 0))
+            except ValueError:
+                likes = 0
+                retweets = 0
+                
+            if likes < min_likes or retweets < min_retweets:
+                continue
+
+            # Filter by Date
+            created_at_str = row.get("created_at")
+            if (start_dt or end_dt) and created_at_str:
+                try:
+                    # Handle potential Z suffix or other formats if necessary
+                    tweet_dt = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                    
+                    if start_dt and tweet_dt < start_dt:
+                        continue
+                    if end_dt and tweet_dt > end_dt:
+                        continue
+                except ValueError:
+                    continue
+
+            # Filter by Keywords
+            if keywords:
+                text = row.get("text", "").lower()
+                keyword_matches = [k.lower() in text for k in keywords]
+                
+                if logic.upper() == "AND":
+                    if not all(keyword_matches):
+                        continue
+                else: # OR
+                    if not any(keyword_matches):
+                        continue
+
+            # If we passed all filters, add to results
+            results.append(row)
+            
+    return results
+
 def main():
     
     """

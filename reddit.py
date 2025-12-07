@@ -13,10 +13,8 @@ from rich import box
 
 load_dotenv()
 
-# Configuration
-# No API keys needed for public JSON endpoints
 REDDIT_USER_AGENT = os.getenv("REDDIT_USER_AGENT", "python:grok-trader:v1.0 (by /u/yourusername)")
-USE_TEST_DATA = False # Set to True to use CSV data instead of live API
+USE_TEST_DATA = False
 CSV_FILE = "reddit_data.csv"
 
 console = Console()
@@ -56,7 +54,7 @@ def save_to_csv(post, user):
             user.username if user else "Unknown",
             post.subreddit,
             post.title.replace('\n', ' '),
-            post.text.replace('\n', ' ')[:500], # Truncate long text for CSV
+            post.text.replace('\n', ' ')[:500],
             metrics.get('score', 0),
             metrics.get('num_comments', 0),
             metrics.get('upvote_ratio', 0),
@@ -72,22 +70,19 @@ def display_post(post, user):
     else:
         author_text = Text(f"Unknown User in r/{post.subreddit}", style="bold red")
 
-    # Title and Text
     post_content = Text()
     post_content.append(f"{post.title}\n\n", style="bold yellow")
     
-    # Truncate body text for display if too long
     display_text = post.text[:300] + "..." if len(post.text) > 300 else post.text
     post_content.append(display_text, style="white")
 
     metrics = post.metrics or {}
     
-    # Handle timestamp
     if isinstance(post.created_utc, (int, float)):
         dt = datetime.fromtimestamp(post.created_utc)
         date_str = dt.strftime('%I:%M:%S %p %m/%d/%Y').lower()
     elif isinstance(post.created_utc, str):
-         date_str = post.created_utc # Already formatted from CSV
+         date_str = post.created_utc
     else:
         date_str = "Unknown Date"
 
@@ -191,14 +186,12 @@ def fetch_posts(keywords=None,
         query = build_query(keywords, logic)
         console.print(f"[bold yellow]Searching Reddit for:[/bold yellow] '{query}' in {subreddits if subreddits else 'all'}...\n")
 
-        # Determine URL
         if subreddits:
             sub_string = "+".join(subreddits)
             base_url = f"https://www.reddit.com/r/{sub_string}"
         else:
             base_url = "https://www.reddit.com/r/all"
 
-        # Determine Endpoint and Params
         params = {'limit': limit}
         
         if query:
@@ -208,11 +201,9 @@ def fetch_posts(keywords=None,
             params['t'] = time_filter
             params['restrict_sr'] = 1 if subreddits else 0
         else:
-            # If no keywords, just get top/hot posts from the subreddit(s)
             url = f"{base_url}/{sort}.json"
             params['t'] = time_filter
 
-        # Execute Request
         response = requests.get(url, headers=headers, params=params)
         
         if response.status_code != 200:
@@ -256,6 +247,90 @@ def fetch_posts(keywords=None,
 
     except Exception as e:
         console.print(f"[bold red]An error occurred:[/bold red] {e}")
+
+def load_posts(keywords=None, 
+                       subreddits=None, 
+                       authors=None,
+                       start_time=None, 
+                       end_time=None, 
+                       logic="AND", 
+                       min_score=0, 
+                       min_comments=0):
+
+    if not os.path.exists(CSV_FILE):
+        console.print(f"[bold red]Error:[/bold red] {CSV_FILE} not found.")
+        return []
+
+    results = []
+    
+    start_ts = None
+    end_ts = None
+    
+    if start_time:
+        try:
+            dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            start_ts = dt.timestamp()
+        except ValueError:
+            pass
+            
+    if end_time:
+        try:
+            dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            end_ts = dt.timestamp()
+        except ValueError:
+            pass
+
+    with open(CSV_FILE, mode='r', encoding='utf-8') as file:
+        reader = csv.DictReader(file)
+        
+        for row in reader:
+            if subreddits:
+                if row.get("subreddit", "").lower() not in [s.lower() for s in subreddits]:
+                    continue
+
+            if authors:
+                if row.get("author", "").lower() not in [a.lower() for a in authors]:
+                    continue
+
+            try:
+                score = int(row.get("score", 0))
+                comments = int(row.get("comments", 0))
+            except ValueError:
+                score = 0
+                comments = 0
+                
+            if score < min_score or comments < min_comments:
+                continue
+
+            created_utc_str = row.get("created_utc")
+            if (start_ts or end_ts) and created_utc_str:
+                try:
+                    post_ts = float(created_utc_str)
+                    
+                    if start_ts and post_ts < start_ts:
+                        continue
+                    if end_ts and post_ts > end_ts:
+                        continue
+                except ValueError:
+                    continue
+
+            if keywords:
+                title = row.get("title", "").lower()
+                text = row.get("text", "").lower()
+                content = title + " " + text
+                
+                keyword_matches = [k.lower() in content for k in keywords]
+                
+                if logic.upper() == "AND":
+                    if not all(keyword_matches):
+                        continue
+                else:
+                    if not any(keyword_matches):
+                        continue
+
+            results.append(row)
+            
+    return results
 
 def main():
     
