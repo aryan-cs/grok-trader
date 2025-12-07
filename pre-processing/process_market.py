@@ -50,53 +50,81 @@ def generate_search_terms(market: str, client):
         print(f"Error generating search terms: {e}")
         return {"keywords": [], "subreddits": []}
 
-def get_market_sentiment(market: str, contracts: list = None, start_date: str = None, end_date: str = None, limit: int = 20, verbose: bool = False):
+def get_market_sentiment(market: str = None, contracts: list = None, start_date: str = None, end_date: str = None, limit: int = 20, verbose: bool = False, accounts: list = None):
     """
     Fetches and analyzes social media and news data for a specific market.
     
     Args:
-        market (str): The market question or topic (e.g., "Will Lando Norris win?").
+        market (str, optional): The market question or topic. If None, assumes general feed.
         contracts (list, optional): List of contract names to filter for.
         start_date (str, optional): ISO 8601 start date for data fetch.
         end_date (str, optional): ISO 8601 end date for data fetch.
         limit (int, optional): Max number of items to fetch per source. Default 20.
         verbose (bool, optional): Whether to print progress updates.
+        accounts (list, optional): List of X accounts to prioritize/filter by.
         
     Returns:
         list: A list of relevant, analyzed items with sentiment and reasoning.
     """
     if verbose:
-        print(f"Fetching data for market: {market}")
+        print(f"Fetching data for market: {market if market else 'General Feed'}")
         if start_date:
             print(f"Start Date: {start_date}")
         if end_date:
             print(f"End Date: {end_date}")
+        if accounts:
+            print(f"Target Accounts: {accounts}")
         
     tweets = []
     posts = []
     articles = []
 
     if client:
-        if verbose:
-            print("Generating search terms with Grok...")
-        search_config = generate_search_terms(market, client)
-        keywords = search_config.get("keywords", [])
-        subreddits = search_config.get("subreddits", [])
+        keywords = []
+        subreddits = []
         
-        if verbose:
-            print(f"Keywords: {keywords}")
-            print(f"Subreddits: {subreddits}")
+        # Only generate keywords if we have a specific market
+        if market:
+            if verbose:
+                print("Generating search terms with Grok...")
+            search_config = generate_search_terms(market, client)
+            keywords = search_config.get("keywords", [])
+            subreddits = search_config.get("subreddits", [])
             
-        if keywords:
+            if verbose:
+                print(f"Keywords: {keywords}")
+                print(f"Subreddits: {subreddits}")
+        
+        # Fetch Tweets
+        # If we have accounts, we can fetch even without keywords
+        if keywords or accounts:
             if verbose:
                 print("Fetching fresh Tweets...")
             try:
-                fetched = fetch_tweets(keywords=keywords, start_time=start_date, end_time=end_date, max_results=limit)
-                if fetched:
-                    tweets = fetched
+                # If accounts are provided, fetch from them (possibly without keywords)
+                if accounts:
+                    fetched = fetch_tweets(keywords=keywords, usernames=accounts, start_time=start_date, end_time=end_date, max_results=limit)
+                    if fetched:
+                        tweets.extend(fetched)
+                
+                # If we have keywords, also do a general search (unless we only want account feed)
+                # If market is None, we probably only want account feed if accounts are provided.
+                if keywords:
+                    if accounts and verbose:
+                        print("Fetching general Tweets (crowd sentiment)...")
+                    
+                    fetched_general = fetch_tweets(keywords=keywords, start_time=start_date, end_time=end_date, max_results=limit)
+                    if fetched_general:
+                        # Avoid duplicates if any
+                        existing_ids = {t['link'] for t in tweets}
+                        for t in fetched_general:
+                            if t['link'] not in existing_ids:
+                                tweets.append(t)
             except Exception as e:
                 print(f"Error fetching tweets: {e}")
 
+        # Fetch Reddit/Reuters only if we have keywords (requires topic)
+        if keywords:
             if verbose:
                 print("Fetching fresh Reddit posts...")
             try:
@@ -135,6 +163,7 @@ def get_market_sentiment(market: str, contracts: list = None, start_date: str = 
         if verbose:
             print(f"[{i+1}/{len(items)}] Analyzing item from {item['source']}...")
 
+        # If market is None, analyze_text should handle it (e.g. generic financial analysis)
         analysis = analyze_text(item['text'], item['source'], market=market)
         
         if analysis.get('is_useful'):
