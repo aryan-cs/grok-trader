@@ -216,7 +216,11 @@ def get_market_sentiment(
             f"Loaded {len(tweets)} tweets, {len(posts)} posts, {len(articles)} articles"
         )
 
-    _send_thinking_message(websocket, "Understanding sentiment...", loop)
+    # Send summary of what was fetched
+    summary = f"Found {len(tweets)} tweets, {len(posts)} Reddit posts, {len(articles)} Reuters articles"
+    _send_thinking_message(websocket, summary, loop)
+
+    _send_thinking_message(websocket, "Analyzing sentiment...", loop)
     items = normalize_data(tweets, posts, articles)
 
     if verbose:

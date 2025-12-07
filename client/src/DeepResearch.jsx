@@ -1,16 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 
-const DeepResearch = ({ eventSlug, selectedMarket, websocket, clientId, onResearchStart }) => {
+const DeepResearch = ({
+  eventSlug,
+  selectedMarket,
+  websocket,
+  clientId,
+  onResearchStart,
+  thinkingMessages,
+  setThinkingMessages,
+  report,
+  setReport,
+  recommendation,
+  setRecommendation,
+  citations,
+  setCitations,
+  followupMessages,
+  setFollowupMessages,
+  isGenerating,
+  setIsGenerating,
+  isFollowupStreaming,
+  setIsFollowupStreaming
+}) => {
   const [customNotes, setCustomNotes] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [thinkingMessages, setThinkingMessages] = useState([]);
-  const [report, setReport] = useState('');
-  const [recommendation, setRecommendation] = useState(null);
-  const [citations, setCitations] = useState([]);
-  const [followupMessages, setFollowupMessages] = useState([]);
   const [followupInput, setFollowupInput] = useState('');
-  const [isFollowupStreaming, setIsFollowupStreaming] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const followupStreamRef = useRef('');
   const reportStreamRef = useRef('');

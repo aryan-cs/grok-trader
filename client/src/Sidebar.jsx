@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './Sidebar.css';
 import Chat from './Chat';
 import DeepResearch from './DeepResearch';
+import AutoTrade from './AutoTrade';
 
 const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -15,6 +16,16 @@ const Sidebar = () => {
   const [marketSlugs, setMarketSlugs] = useState([]);
   const [selectedMarket, setSelectedMarket] = useState(null);
   const [loadingMarkets, setLoadingMarkets] = useState(false);
+
+  // Deep Research state - lifted to persist across tab switches
+  const [researchThinkingMessages, setResearchThinkingMessages] = useState([]);
+  const [researchReport, setResearchReport] = useState('');
+  const [researchRecommendation, setResearchRecommendation] = useState(null);
+  const [researchCitations, setResearchCitations] = useState([]);
+  const [researchFollowupMessages, setResearchFollowupMessages] = useState([]);
+  const [researchIsGenerating, setResearchIsGenerating] = useState(false);
+  const [researchIsFollowupStreaming, setResearchIsFollowupStreaming] = useState(false);
+
   const wsRef = useRef(null);
   const previousEventSlug = useRef(null);
 
@@ -196,6 +207,14 @@ const Sidebar = () => {
       setSelectedMarket(null);
       setSentimentItems([]);
       setFeedLoading(false);
+      // Reset research state
+      setResearchThinkingMessages([]);
+      setResearchReport('');
+      setResearchRecommendation(null);
+      setResearchCitations([]);
+      setResearchFollowupMessages([]);
+      setResearchIsGenerating(false);
+      setResearchIsFollowupStreaming(false);
       console.log('🔄 Navigated to new event, resetting state:', eventSlug);
     }
     previousEventSlug.current = eventSlug;
@@ -302,6 +321,12 @@ const Sidebar = () => {
             >
               Deep Research
             </button>
+            <button
+              className={`grok-tab ${activeTab === 'autotrade' ? 'active' : ''}`}
+              onClick={() => setActiveTab('autotrade')}
+            >
+              Auto Trader
+            </button>
           </div>
 
           <div className="grok-body">
@@ -379,6 +404,28 @@ const Sidebar = () => {
                 websocket={wsRef.current}
                 clientId={clientId}
                 onResearchStart={handleResearchStart}
+                thinkingMessages={researchThinkingMessages}
+                setThinkingMessages={setResearchThinkingMessages}
+                report={researchReport}
+                setReport={setResearchReport}
+                recommendation={researchRecommendation}
+                setRecommendation={setResearchRecommendation}
+                citations={researchCitations}
+                setCitations={setResearchCitations}
+                followupMessages={researchFollowupMessages}
+                setFollowupMessages={setResearchFollowupMessages}
+                isGenerating={researchIsGenerating}
+                setIsGenerating={setResearchIsGenerating}
+                isFollowupStreaming={researchIsFollowupStreaming}
+                setIsFollowupStreaming={setResearchIsFollowupStreaming}
+              />
+            )}
+
+            {activeTab === 'autotrade' && (
+              <AutoTrade
+                eventSlug={eventSlug}
+                selectedMarket={selectedMarket}
+                clientId={clientId}
               />
             )}
           </div>
