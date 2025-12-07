@@ -16,8 +16,11 @@ const Chat = ({ websocket, clientId, eventSlug, chatMessages, setChatMessages })
       try {
         const data = JSON.parse(event.data);
 
+        // Only handle chat messages
+        if (data.message_type !== 'chat') return;
+
         // Handle chat deltas
-        if (data.type === 'chat_delta') {
+        if (data.type === 'delta') {
           setIsStreaming(true);
           streamingMessageRef.current += data.content;
 
@@ -34,7 +37,7 @@ const Chat = ({ websocket, clientId, eventSlug, chatMessages, setChatMessages })
         }
 
         // Handle chat completion
-        else if (data.type === 'chat_complete') {
+        else if (data.type === 'complete') {
           console.log('✅ Chat response complete');
           setIsStreaming(false);
           streamingMessageRef.current = '';

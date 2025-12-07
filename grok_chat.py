@@ -25,7 +25,7 @@ async def stream_chat_response(messages: list[dict], websocket):
     """
     if not XAI_API_KEY:
         await websocket.send_json(
-            {"type": "error", "error": "XAI_API_KEY not configured"}
+            {"message_type": "chat", "type": "error", "error": "XAI_API_KEY not configured"}
         )
         return
 
@@ -47,13 +47,13 @@ async def stream_chat_response(messages: list[dict], websocket):
                 if content:
                     # Send text delta to client
                     await websocket.send_json(
-                        {"type": "chat_delta", "content": content}
+                        {"message_type": "chat", "type": "delta", "content": content}
                     )
 
         # Send completion signal
-        await websocket.send_json({"type": "chat_complete"})
+        await websocket.send_json({"message_type": "chat", "type": "complete"})
 
     except Exception as e:
         error_msg = str(e)
         print(f"❌ Chat error: {error_msg}")
-        await websocket.send_json({"type": "error", "error": f"Error: {error_msg}"})
+        await websocket.send_json({"message_type": "chat", "type": "error", "error": f"Error: {error_msg}"})
