@@ -2,8 +2,8 @@ import requests
 import ast
 
 
-def fetch_event(slug: str):
-    url = f"https://gamma-api.polymarket.com/events?slug={slug}"
+def fetch_event_market_clobs(event_slug: str):
+    url = f"https://gamma-api.polymarket.com/events?slug={event_slug}"
     response = requests.get(url).json()[0]
     mapping = {}
 
@@ -13,6 +13,19 @@ def fetch_event(slug: str):
 
     return mapping
 
+
+def fetch_event_market_slugs(event_slug: str):
+    url = f"https://gamma-api.polymarket.com/events?slug={event_slug}"
+    response = requests.get(url).json()[0]
+    slugs = []
+
+    for market in response["markets"]:
+        slugs.append(market["slug"])
+
+    return slugs
+
+
+fetch_event_market_slugs("fed-decision-in-january")
 
 # Example output:
 # {
