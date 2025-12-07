@@ -10,7 +10,11 @@ const Sidebar = () => {
   const [activeTab, setActiveTab] = useState('feed');
   const [chatMessages, setChatMessages] = useState([]);
   const [clientId] = useState(() => `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  const [marketSlugs, setMarketSlugs] = useState([]);
+  const [selectedMarket, setSelectedMarket] = useState(null);
+  const [loadingMarkets, setLoadingMarkets] = useState(false);
   const wsRef = useRef(null);
+  const previousEventSlug = useRef(null);
 
   // Extract event slug from URL and connect to WebSocket
   useEffect(() => {
@@ -92,6 +96,50 @@ const Sidebar = () => {
     };
   }, []);
 
+  // Fetch market slugs when event slug changes
+  useEffect(() => {
+    const fetchMarkets = async () => {
+      if (!eventSlug) {
+        setMarketSlugs([]);
+        setSelectedMarket(null);
+        return;
+      }
+
+      setLoadingMarkets(true);
+      try {
+        const response = await fetch(`http://localhost:8765/market-slugs?event_slug=${encodeURIComponent(eventSlug)}`);
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          setMarketSlugs(data.market_slugs);
+          console.log('📊 Fetched markets:', data.market_slugs);
+        } else {
+          console.error('Error fetching markets:', data.error);
+          setMarketSlugs([]);
+        }
+      } catch (error) {
+        console.error('Error fetching markets:', error);
+        setMarketSlugs([]);
+      } finally {
+        setLoadingMarkets(false);
+      }
+    };
+
+    fetchMarkets();
+  }, [eventSlug]);
+
+  // Reset state when navigating to a new event
+  useEffect(() => {
+    if (eventSlug && previousEventSlug.current && eventSlug !== previousEventSlug.current) {
+      // New event detected, reset state
+      setActiveTab('feed');
+      setChatMessages([]);
+      setSelectedMarket(null);
+      console.log('🔄 Navigated to new event, resetting state:', eventSlug);
+    }
+    previousEventSlug.current = eventSlug;
+  }, [eventSlug]);
+
   const handleCollapse = () => {
     setIsCollapsed(true);
     // Notify parent window about collapse state
@@ -133,7 +181,29 @@ const Sidebar = () => {
               </button>
             </div>
             {eventSlug && (
-              <p className="grok-event-slug">{eventSlug}</p>
+              <>
+                <p className="grok-event-slug">{eventSlug}</p>
+                <div className="grok-market-selector">
+                  {loadingMarkets ? (
+                    <select className="grok-market-select" disabled>
+                      <option>Loading markets...</option>
+                    </select>
+                  ) : (
+                    <select
+                      className="grok-market-select"
+                      value={selectedMarket || ''}
+                      onChange={(e) => setSelectedMarket(e.target.value || null)}
+                    >
+                      <option value="">Select a market to get started</option>
+                      {marketSlugs.map((slug) => (
+                        <option key={slug} value={slug}>
+                          {slug}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </>
             )}
           </div>
 
@@ -198,6 +268,7 @@ const Sidebar = () => {
             {activeTab === 'research' && (
               <DeepResearch
                 eventSlug={eventSlug}
+                selectedMarket={selectedMarket}
                 websocket={wsRef.current}
                 clientId={clientId}
               />
