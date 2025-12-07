@@ -13,10 +13,14 @@ from strategy.brain import produce_trading_decision
 
 
 class Strategy:
-    def __init__(self, market_slug, condition, max_size):
+    def __init__(
+        self, market_slug, condition, max_size, max_position=None, positions=None
+    ):
         self.market_slug = market_slug
         self.condition = condition
         self.max_size = max_size
+        self.max_position = max_position if max_position is not None else max_size
+        self.positions = positions or []
 
         self.yes_book = None
         self.no_book = None
@@ -36,20 +40,10 @@ class Strategy:
             oldest = self.tweets.popleft()
             self.tweet_ids.discard(oldest.get("tweet_id"))
 
-        ts = tweet.get("created_at", "")[:19]
-        user = tweet.get("username") or tweet.get("name") or "unknown"
-        likes = tweet.get("likes", 0)
-        text = (tweet.get("text") or "").replace("\n", " ")
-        if len(text) > 120:
-            text = text[:117] + "..."
-
-        # keep latest tweet context; trading decisions happen on book updates
-        print(f"[tweets][{self.market_slug}] {ts} @{user} ♥{likes}: {text}")
-
     def on_new_book(self, yes_book, no_book):
-        # first time logging
-        if not self.yes_book and not self.no_book:
-            print(f"[{self.market_slug}] {yes_book} || {no_book}")
+        print(
+            f"[{self.market_slug}] {yes_book.best_bid(1)}@{yes_book.best_ask(1)} || {no_book.best_bid(1)}@{no_book.best_ask(1)}"
+        )
 
         self.yes_book = yes_book
         self.no_book = no_book
@@ -67,9 +61,11 @@ class Strategy:
         try:
             decision = produce_trading_decision(
                 self.max_size,
+                self.max_position,
                 self.condition,
                 self.yes_book,
                 self.no_book,
+                self.positions,
                 list(self.tweets),
             )
             print(f"[decision][{self.market_slug}] {decision}")
@@ -78,11 +74,11 @@ class Strategy:
 
 
 if __name__ == "__main__":
-    event_slug = "fed-decision-in-january"
-    market_slug = "no-change-in-fed-interest-rates-after-january-2026-meeting"
-    condition = "Fed January 2026 meeting prediction market"
+    event_slug = "spacex-ipo-closing-market-cap"
+    market_slug = "will-spacex-not-ipo-by-december-31-2027"
+    condition = "Comfort trading the SpaceX IPO market; focus on asymmetric buy/sell setups around IPO timing."
 
-    my_strategy = Strategy(market_slug, condition, max_size=10)
+    my_strategy = Strategy(market_slug, condition, max_size=5, max_position=5)
     feed = Polymarket(event_slug, strategy=my_strategy, market_slug=market_slug)
     tweet_feed = TweetFeed(
         market_slug=market_slug,

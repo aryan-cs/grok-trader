@@ -10,6 +10,20 @@ CLOB_HOST = "https://clob.polymarket.com"
 DEFAULT_CHAIN_ID = 137
 
 
+def _derive_address_from_pk(pk_hex: str) -> str:
+    try:
+        from eth_account import Account
+    except ImportError as e:
+        raise RuntimeError(
+            "POLY_FUNDER_ADDRESS not set. Install 'eth-account' to derive it "
+            "from POLY_PRIVATE_KEY automatically (uv add eth-account), or set "
+            "POLY_FUNDER_ADDRESS manually."
+        ) from e
+
+    acct = Account.from_key(pk_hex)
+    return acct.address
+
+
 def create_client(
     private_key: str,
     funder: str,
@@ -40,6 +54,12 @@ def create_client(
     else:
         client.set_api_creds(client.create_or_derive_api_creds())
 
+    # Convenience attribute to mirror the trading address
+    try:
+        client.address = client.get_address()
+    except Exception:
+        pass
+
     return client
 
 
@@ -47,15 +67,23 @@ def create_client_from_env(
     *,
     host: str = CLOB_HOST,
     chain_id: int = DEFAULT_CHAIN_ID,
-    signature_type: int = 0,
+    signature_type: int | None = None,
     pk_env: str = "POLY_PRIVATE_KEY",
     funder_env: str = "POLY_FUNDER_ADDRESS",
     api_key_env: str = "POLY_API_KEY",
     api_secret_env: str = "POLY_API_SECRET",
     api_passphrase_env: str = "POLY_API_PASSPHRASE",
+    signature_type_env: str = "POLY_SIGNATURE_TYPE",
+    funder_override: Optional[str] = None,
 ) -> ClobClient:
     private_key = os.environ[pk_env]
-    funder = os.environ[funder_env]
+    funder = funder_override or os.environ.get(funder_env) or _derive_address_from_pk(
+        private_key
+    )
+
+    if signature_type is None:
+        sig_env = os.environ.get(signature_type_env)
+        signature_type = int(sig_env) if sig_env is not None else 0
 
     api_key = os.environ.get(api_key_env)
     api_secret = os.environ.get(api_secret_env)
@@ -75,6 +103,12 @@ def create_client_from_env(
 
 try:
     IOC_ORDER_TYPE = OrderType.FAK  # Fill-And-Kill == IOC-style
+    ORDER_TYPE_MAP = {
+        "FAK": OrderType.FAK,
+        "FOK": OrderType.FOK,
+        "GTC": OrderType.GTC,
+        "GTD": OrderType.GTD,
+    }
 except AttributeError as e:
     raise RuntimeError(
         "This version of py-clob-client does not define OrderType.FAK "
@@ -88,6 +122,7 @@ def place_order(
     side: str,
     price: float,
     size: float,
+    order_type: str | OrderType = "FAK",
 ) -> Any:
     side_upper = side.upper()
     if side_upper == "BUY":
@@ -97,6 +132,12 @@ def place_order(
     else:
         raise ValueError("side must be 'buy' or 'sell'")
 
+    if isinstance(order_type, str):
+        ot = ORDER_TYPE_MAP.get(order_type.upper())
+        if not ot:
+            raise ValueError(f"order_type must be one of {list(ORDER_TYPE_MAP.keys())}")
+        order_type = ot
+
     order_args = OrderArgs(
         token_id=token_id,
         price=price,
@@ -105,7 +146,7 @@ def place_order(
     )
 
     signed_order = client.create_order(order_args)
-    return client.post_order(signed_order, IOC_ORDER_TYPE)
+    return client.post_order(signed_order, order_type)
 
 
 def get_orders(
