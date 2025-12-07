@@ -93,10 +93,33 @@ Additionally, here are some custom user instructions to focus on:
                 "content": "Gathering market sentiment data...",
             }
         )
+        await asyncio.sleep(0)  # Yield to event loop to flush WebSocket
 
-        # Fetch market sentiment data upfront
-        sentiment_data = get_market_sentiment(market_title)
+        # Fetch market sentiment data upfront (run in thread to avoid blocking)
+        loop = asyncio.get_event_loop()
+        sentiment_data = await asyncio.to_thread(
+            get_market_sentiment,
+            market_title,
+            websocket=websocket,
+            loop=loop
+        )
         sentiment_text = json.dumps(sentiment_data, indent=2)
+
+        # Build citations list from sentiment data
+        citations = []
+        for idx, item in enumerate(sentiment_data, 1):
+            if item.get("link"):
+                source_type = item.get("source", "unknown").upper()
+                meta = item.get("meta", "Unknown")
+                citations.append(
+                    {
+                        "id": idx,
+                        "source": source_type,
+                        "author": meta,
+                        "url": item["link"],
+                        "sentiment": item.get("sentiment", "neutral"),
+                    }
+                )
 
         # Update prompt to include sentiment data
         prompt_with_data = f"""{prompt}
@@ -109,6 +132,7 @@ Here is the current market sentiment data I gathered for you:
 {sentiment_text}
 ```
 
+When referencing specific sources in your analysis, you can mention them by their source type (TWEET, REDDIT, REUTERS) and author/username.
 Use this data in your analysis."""
 
         # Send thinking message
@@ -119,6 +143,7 @@ Use this data in your analysis."""
                 "content": "Analyzing market data and trends...",
             }
         )
+        await asyncio.sleep(0)  # Yield to event loop to flush WebSocket
 
         # Create streaming chat completion
         stream = await client.chat.completions.create(
@@ -145,7 +170,11 @@ Use this data in your analysis."""
                     full_response += content
                     # Send text delta to client
                     await websocket.send_json(
-                        {"message_type": "research", "type": "delta", "content": content}
+                        {
+                            "message_type": "research",
+                            "type": "delta",
+                            "content": content,
+                        }
                     )
 
         # Extract recommendation from report
@@ -155,12 +184,13 @@ Use this data in your analysis."""
         elif "RECOMMENDATION: NO" in full_response.upper():
             recommendation = "NO"
 
-        # Send completion with recommendation
+        # Send completion with recommendation and citations
         await websocket.send_json(
             {
                 "message_type": "research",
                 "type": "complete",
                 "recommendation": recommendation,
+                "citations": citations,
             }
         )
 
@@ -168,6 +198,7 @@ Use this data in your analysis."""
 
     except Exception as e:
         import traceback
+
         error_msg = str(e)
         traceback_str = traceback.format_exc()
         print(f"❌ Research error: {error_msg}")
@@ -206,7 +237,7 @@ async def research_followup(websocket, messages: list[dict]):
                 "role": "system",
                 "content": "You are a helpful assistant that analyzes prediction markets. "
                 "You previously provided a research report. Now answer follow-up questions "
-                "about that report, provide clarifications, or respond to challenges."
+                "about that report, provide clarifications, or respond to challenges.",
             }
         ] + messages
 
@@ -232,7 +263,7 @@ async def research_followup(websocket, messages: list[dict]):
                         {
                             "message_type": "research_followup",
                             "type": "delta",
-                            "content": content
+                            "content": content,
                         }
                     )
 

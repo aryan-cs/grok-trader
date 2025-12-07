@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 
-const Chat = ({ websocket, clientId, eventSlug, chatMessages, setChatMessages }) => {
+const Chat = ({ websocket, clientId, eventSlug, selectedMarket, chatMessages, setChatMessages }) => {
   const [chatInput, setChatInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -87,7 +87,8 @@ const Chat = ({ websocket, clientId, eventSlug, chatMessages, setChatMessages })
         body: JSON.stringify({
           client_id: clientId,
           messages: newMessages,
-          event_slug: eventSlug
+          event_slug: eventSlug,
+          market_slug: selectedMarket
         }),
       });
 

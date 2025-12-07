@@ -9,6 +9,7 @@ if __package__ is None:
 
 from strategy.polymarket import Polymarket
 from strategy.tweets import TweetFeed
+from strategy.brain import produce_trading_decision
 
 
 class Strategy:
@@ -21,6 +22,7 @@ class Strategy:
         self.no_book = None
         self.tweets = deque(maxlen=10)
         self.tweet_ids: set[int] = set()
+        self._last_decision_ts = 0.0
 
     def on_new_post(self, tweet):
         tweet_id = tweet.get("tweet_id")
@@ -41,7 +43,8 @@ class Strategy:
         if len(text) > 120:
             text = text[:117] + "..."
 
-        # place the order TODO(ayushgun) later
+        # keep latest tweet context; trading decisions happen on book updates
+        print(f"[tweets][{self.market_slug}] {ts} @{user} ♥{likes}: {text}")
 
     def on_new_book(self, yes_book, no_book):
         # first time logging
@@ -51,16 +54,39 @@ class Strategy:
         self.yes_book = yes_book
         self.no_book = no_book
 
+        if not self.yes_book or not self.no_book:
+            return
+
+        # simple throttle to avoid hammering the model
+        now = time.time()
+        if now - self._last_decision_ts < 30:
+            return
+        self._last_decision_ts = now
+
+        # produce tradng decision
+        try:
+            decision = produce_trading_decision(
+                self.max_size,
+                self.condition,
+                self.yes_book,
+                self.no_book,
+                list(self.tweets),
+            )
+            print(f"[decision][{self.market_slug}] {decision}")
+        except Exception as e:
+            print(f"[decision][error] {e}")
+
 
 if __name__ == "__main__":
-    event_slug = "spacex-ipo-closing-market-cap"
-    market_slug = "will-spacex-not-ipo-by-december-31-2027"
+    event_slug = "fed-decision-in-january"
+    market_slug = "no-change-in-fed-interest-rates-after-january-2026-meeting"
+    condition = "Fed January 2026 meeting prediction market"
 
-    my_strategy = Strategy(market_slug)
+    my_strategy = Strategy(market_slug, condition, max_size=10)
     feed = Polymarket(event_slug, strategy=my_strategy, market_slug=market_slug)
     tweet_feed = TweetFeed(
         market_slug=market_slug,
-        min_likes=0,
+        min_likes=5,
         strategy=my_strategy,
         poll_interval=30,
         max_results=20,

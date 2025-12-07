@@ -107,6 +107,7 @@ async def research_endpoint(request: ResearchRequest):
             "content": "Fetching live market prices...",
         }
     )
+    await asyncio.sleep(0)  # Yield to event loop to flush WebSocket
 
     try:
         # Create feed and subscribe to market

@@ -1,15 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 
-const DeepResearch = ({ eventSlug, selectedMarket, websocket, clientId, onResearchStart }) => {
+const DeepResearch = ({
+  eventSlug,
+  selectedMarket,
+  websocket,
+  clientId,
+  onResearchStart,
+  thinkingMessages,
+  setThinkingMessages,
+  report,
+  setReport,
+  recommendation,
+  setRecommendation,
+  citations,
+  setCitations,
+  followupMessages,
+  setFollowupMessages,
+  isGenerating,
+  setIsGenerating,
+  isFollowupStreaming,
+  setIsFollowupStreaming
+}) => {
   const [customNotes, setCustomNotes] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [thinkingMessages, setThinkingMessages] = useState([]);
-  const [report, setReport] = useState('');
-  const [recommendation, setRecommendation] = useState(null);
-  const [followupMessages, setFollowupMessages] = useState([]);
   const [followupInput, setFollowupInput] = useState('');
-  const [isFollowupStreaming, setIsFollowupStreaming] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const followupStreamRef = useRef('');
   const reportStreamRef = useRef('');
@@ -18,12 +32,26 @@ const DeepResearch = ({ eventSlug, selectedMarket, websocket, clientId, onResear
 
   // Listen for research messages from WebSocket
   useEffect(() => {
-    if (!websocket) return;
+    if (!websocket) {
+      console.warn('⚠️ DeepResearch: WebSocket not available');
+      return;
+    }
+
+    console.log('🔌 DeepResearch: WebSocket connection state:', websocket.readyState);
+    console.log('🔌 WebSocket states: CONNECTING=0, OPEN=1, CLOSING=2, CLOSED=3');
 
     const handleWebSocketMessage = (event) => {
+      const receiveTime = Date.now();
+      console.log(`⏰ [${receiveTime}] WebSocket message received in DeepResearch`);
+
       try {
         const data = JSON.parse(event.data);
-        console.log('🔍 DeepResearch received message:', data);
+        console.log(`📦 [${receiveTime}] Parsed message:`, data);
+
+        // Log ALL messages for debugging
+        if (data.message_type === 'research' || data.message_type === 'research_followup') {
+          console.log('🔍 DeepResearch received message:', JSON.stringify(data, null, 2));
+        }
 
         // Handle research messages
         if (data.message_type === 'research') {
@@ -32,18 +60,16 @@ const DeepResearch = ({ eventSlug, selectedMarket, websocket, clientId, onResear
           // Handle thinking updates
           if (data.type === 'thinking') {
             console.log('💭 Adding thinking message:', data.content);
-            setThinkingMessages((prev) => [...prev, data.content]);
+            setThinkingMessages((prev) => {
+              const newMessages = [...prev, data.content];
+              console.log('📝 Updated thinking messages count:', newMessages.length);
+              return newMessages;
+            });
           }
 
           // Handle streaming delta content
           else if (data.type === 'delta') {
             console.log('📄 Received delta, length:', data.content?.length);
-
-            // Clear thinking messages when first delta arrives
-            if (reportStreamRef.current === '') {
-              setThinkingMessages([]);
-            }
-
             reportStreamRef.current += data.content;
             setReport(reportStreamRef.current);
           }
@@ -51,9 +77,13 @@ const DeepResearch = ({ eventSlug, selectedMarket, websocket, clientId, onResear
           // Handle completion
           else if (data.type === 'complete') {
             console.log('✅ Research complete:', data.recommendation);
+            console.log('📚 Citations received:', data.citations?.length || 0);
             reportStreamRef.current = '';
             setIsGenerating(false);
             setRecommendation(data.recommendation);
+            if (data.citations) {
+              setCitations(data.citations);
+            }
           }
 
           // Handle errors
@@ -130,21 +160,29 @@ const DeepResearch = ({ eventSlug, selectedMarket, websocket, clientId, onResear
     setThinkingMessages([]);
     setReport('');
     setRecommendation(null);
+    setCitations([]);
     reportStreamRef.current = '';
 
     try {
-      // Send request via WebSocket instead of HTTP POST to avoid Mixed Content issues
-      if (websocket && websocket.readyState === WebSocket.OPEN) {
-        websocket.send(JSON.stringify({
-          type: 'research_request',
+      const response = await fetch('http://localhost:8765/research', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           client_id: clientId,
           market_title: selectedMarket,
+          event_slug: eventSlug || '',
           custom_notes: customNotes
-        }));
-        console.log('📤 Sent research request via WebSocket');
-      } else {
-        throw new Error('WebSocket not connected');
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      const data = await response.json();
+      console.log('📤 Sent research request, status:', data.status);
     } catch (error) {
       console.error('Error sending research request:', error);
       setIsGenerating(false);
@@ -227,6 +265,9 @@ const DeepResearch = ({ eventSlug, selectedMarket, websocket, clientId, onResear
 
   const hasStartedResearch = isGenerating || thinkingMessages.length > 0 || report;
 
+  // Debug logging
+  console.log('🎨 DeepResearch render - isGenerating:', isGenerating, 'thinkingMessages:', thinkingMessages.length, 'report:', !!report);
+
   return (
     <div className="grok-deep-research">
       {/* Initial Form - Show only if research hasn't started */}
@@ -277,14 +318,23 @@ const DeepResearch = ({ eventSlug, selectedMarket, websocket, clientId, onResear
             onScroll={handleScroll}
           >
             {/* Thinking Messages */}
-            {thinkingMessages.length > 0 && thinkingMessages.map((msg, idx) => (
-              <div key={`thinking-${idx}`} className="grok-research-thinking">
-                <div className="grok-thinking-icon">
-                  <div className="grok-spinner-small"></div>
+            {thinkingMessages.length > 0 && thinkingMessages.map((msg, idx) => {
+              const isLast = idx === thinkingMessages.length - 1;
+              const isActive = isLast && !report; // Last message is active only if report hasn't started
+
+              return (
+                <div key={`thinking-${idx}`} className="grok-research-thinking">
+                  <div className="grok-thinking-icon">
+                    {isActive ? (
+                      <div className="grok-spinner-small"></div>
+                    ) : (
+                      <div className="grok-checkmark">✓</div>
+                    )}
+                  </div>
+                  <span className="grok-thinking-text">{msg}</span>
                 </div>
-                <span className="grok-thinking-text">{msg}</span>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Show spinner if generating but no messages yet */}
             {isGenerating && thinkingMessages.length === 0 && !report && (
@@ -309,6 +359,33 @@ const DeepResearch = ({ eventSlug, selectedMarket, websocket, clientId, onResear
                   <ReactMarkdown>{report}</ReactMarkdown>
                   {isGenerating && <span className="grok-streaming-cursor">▊</span>}
                 </div>
+
+                {/* Citations Section */}
+                {citations.length > 0 && (
+                  <div className="grok-citations">
+                    <h5 className="grok-citations-title">Sources & Citations</h5>
+                    <div className="grok-citations-list">
+                      {citations.map((citation) => (
+                        <a
+                          key={citation.id}
+                          href={citation.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="grok-citation-item"
+                        >
+                          <span className="grok-citation-number">[{citation.id}]</span>
+                          <span className="grok-citation-source">{citation.source}</span>
+                          {citation.author && (
+                            <span className="grok-citation-author">by {citation.author}</span>
+                          )}
+                          <span className={`grok-citation-sentiment grok-sentiment-${citation.sentiment.toLowerCase()}`}>
+                            {citation.sentiment}
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
