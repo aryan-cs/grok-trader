@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './Sidebar.css';
 import Chat from './Chat';
 import DeepResearch from './DeepResearch';
+import AutoTrade from './AutoTrade';
 
 const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -302,6 +303,12 @@ const Sidebar = () => {
             >
               Deep Research
             </button>
+            <button
+              className={`grok-tab ${activeTab === 'autotrade' ? 'active' : ''}`}
+              onClick={() => setActiveTab('autotrade')}
+            >
+              Auto Trader
+            </button>
           </div>
 
           <div className="grok-body">
@@ -378,6 +385,14 @@ const Sidebar = () => {
                 websocket={wsRef.current}
                 clientId={clientId}
                 onResearchStart={handleResearchStart}
+              />
+            )}
+
+            {activeTab === 'autotrade' && (
+              <AutoTrade
+                eventSlug={eventSlug}
+                selectedMarket={selectedMarket}
+                clientId={clientId}
               />
             )}
           </div>

@@ -16,7 +16,7 @@
   top: 0;
   right: 0;
   height: 100vh;
-  width: 400px;
+  width: 440px;
   background: var(--polymarket-surface);
   border-left: 3px solid var(--polymarket-border);
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
@@ -194,7 +194,7 @@
   border: none;
   color: var(--polymarket-text-secondary);
   cursor: pointer;
-  padding: 12px 16px;
+  padding: 12px 12px;
   font-size: 14px;
   font-weight: 500;
   transition: all 0.2s ease;
@@ -892,6 +892,178 @@
   color: var(--polymarket-text-secondary);
   text-align: center;
   line-height: 1.4;
+}
+
+/* Auto Trade Styles */
+.grok-auto-trade {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+}
+
+.grok-auto-trade-description {
+  margin: 8px 0 0 0;
+  font-size: 14px;
+  color: var(--polymarket-text-secondary);
+}
+
+.grok-auto-trade-active {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid #10b981;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.grok-auto-trade-active h4 {
+  margin: 0 0 12px 0;
+  color: var(--polymarket-text);
+  font-size: 16px;
+}
+
+.grok-auto-trade-id {
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--polymarket-text-secondary);
+  font-family: monospace;
+}
+
+.grok-auto-trade-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.grok-auto-trade-detail {
+  display: flex;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--polymarket-text);
+}
+
+.grok-auto-trade-detail strong {
+  color: var(--polymarket-text);
+  font-weight: 600;
+  min-width: 100px;
+}
+
+.grok-auto-trade-detail span {
+  color: var(--polymarket-text);
+  flex: 1;
+}
+
+.grok-auto-trade-status {
+  margin: 8px 0 16px 0;
+  font-size: 14px;
+  color: var(--polymarket-text);
+}
+
+.grok-status-active {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.grok-textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--polymarket-border);
+  color: var(--polymarket-text);
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.grok-textarea:focus {
+  border-color: var(--polymarket-accent);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.grok-textarea::placeholder {
+  color: var(--polymarket-text-secondary);
+  opacity: 0.6;
+}
+
+.grok-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--polymarket-border);
+  color: var(--polymarket-text);
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.grok-input:focus {
+  border-color: var(--polymarket-accent);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.grok-input::placeholder {
+  color: var(--polymarket-text-secondary);
+  opacity: 0.6;
+}
+
+.grok-start-autotrade-btn {
+  width: 100%;
+  background: var(--polymarket-accent);
+  color: white;
+  border: none;
+  padding: 14px 24px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.grok-start-autotrade-btn:hover:not(:disabled) {
+  background: #0056d6;
+  transform: translateY(-1px);
+}
+
+.grok-start-autotrade-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.grok-stop-autotrade-btn {
+  background: var(--polymarket-danger);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.grok-stop-autotrade-btn:hover:not(:disabled) {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+.grok-stop-autotrade-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.grok-error-message {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--polymarket-danger);
+  color: var(--polymarket-danger);
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
 }
 
 /* Responsive adjustments */
