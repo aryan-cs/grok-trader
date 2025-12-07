@@ -1,5 +1,5 @@
 def main():
-    print("Hello from groktrader!")
+    print("Hello from grok-trader!")
 
 
 if __name__ == "__main__":
