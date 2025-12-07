@@ -14,7 +14,7 @@ load_dotenv()
 
 BEARER_TOKEN = os.getenv("X_BEARER_TOKEN")
 USE_TEST_DATA = False
-CSV_FILE = "tweets_data.csv"
+CSV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tweets_data.csv")
 MIN_TWEETS = 10; """ THIS IS AN API LIMITATION NOT DESIGN CHOICE """
 
 console = Console()

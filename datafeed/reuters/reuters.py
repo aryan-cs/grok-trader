@@ -10,7 +10,7 @@ from rich.text import Text
 from rich import box
 import urllib.parse
 
-CSV_FILE = "reuters_data.csv"
+CSV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reuters_data.csv")
 console = Console()
 
 class Article:

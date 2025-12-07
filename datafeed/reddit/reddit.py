@@ -15,7 +15,7 @@ load_dotenv()
 
 REDDIT_USER_AGENT = os.getenv("REDDIT_USER_AGENT", "python:grok-trader:v1.0 (by /u/yourusername)")
 USE_TEST_DATA = False
-CSV_FILE = "reddit_data.csv"
+CSV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reddit_data.csv")
 
 console = Console()
 
