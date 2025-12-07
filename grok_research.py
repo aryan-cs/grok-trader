@@ -11,6 +11,8 @@ from process_market import get_market_sentiment, get_market_sentiment_tool
 
 load_dotenv()
 
+MODEL_NAME = "grok-4-1-fast-non-reasoning"
+
 def research_market(
     market_title: str, market_rules: str, yes_price: int, no_price: int
 ) -> dict:
@@ -54,7 +56,7 @@ End your response with a clear recommendation: "RECOMMENDATION: YES" or "RECOMME
 
     # Initialize chat with tools
     chat = client.chat.create(
-        model="grok-4-1-fast-non-reasoning",
+        model=MODEL_NAME,
         tools=[get_market_sentiment_tool],
         tool_choice="auto"
     )

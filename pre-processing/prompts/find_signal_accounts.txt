@@ -1,0 +1,25 @@
+I need to find X (Twitter) accounts that provide high-signal, real-time information relevant to resolving this prediction market:
+
+Market: "{market_question}"
+
+Please search for and identify 5-10 specific X accounts.
+Focus on:
+1. Domain experts (e.g., specific sports analysts, political pollsters, economic data aggregators).
+2. Accounts that tweet fast, factual updates.
+3. Accounts that track specific metrics relevant to the market (e.g., Google Trends trackers, flight trackers, court reporters).
+
+For example:
+- If the market is "Will Lando Norris win?", look for F1 data analysis accounts.
+- If the market is "Who will be #1 searched person?", look for Google Trends tracking accounts.
+
+Return ONLY a JSON object with the following structure:
+{{
+    "accounts": [
+        {{
+            "handle": "@handle",
+            "url": "https://x.com/handle",
+            "name": "Account Name",
+            "reason": "Why this account is relevant"
+        }}
+    ]
+}}

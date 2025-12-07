@@ -1,0 +1,9 @@
+Given the prediction market question: "{market}", provide a JSON object with:
+1. "keywords": A list of 3-5 specific search keywords (strings).
+2. "subreddits": A list of 2-3 relevant subreddits (strings, without 'r/').
+
+Example output:
+{{
+    "keywords": ["Lando Norris", "McLaren", "F1 Driver Championship"],
+    "subreddits": ["formula1", "grandprix"]
+}}

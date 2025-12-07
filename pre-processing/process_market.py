@@ -17,30 +17,23 @@ from process_data import normalize_data, analyze_text
 
 load_dotenv()
 
+MODEL_NAME = "grok-4-1-fast-non-reasoning"
+
 try:
     client = Client(api_key=os.getenv("XAI_API_KEY"))
 except Exception as e:
     print(f"Error initializing xAI Client: {e}")
     client = None
 
+PROMPT_FILE = os.path.join(os.path.dirname(__file__), 'prompts', 'generate_search_terms.txt')
+
 def generate_search_terms(market: str, client):
-    """
-    Generates search keywords and subreddits based on the market question using Grok.
-    """
     try:
-        prompt = f"""
-        Given the prediction market question: "{market}", provide a JSON object with:
-        1. "keywords": A list of 3-5 specific search keywords (strings).
-        2. "subreddits": A list of 2-3 relevant subreddits (strings, without 'r/').
+        with open(PROMPT_FILE, 'r') as f:
+            prompt_template = f.read()
+        prompt = prompt_template.format(market=market)
         
-        Example output:
-        {{
-            "keywords": ["Lando Norris", "McLaren", "F1 Driver Championship"],
-            "subreddits": ["formula1", "grandprix"]
-        }}
-        """
-        
-        chat = client.chat.create(model="grok-4-1-fast-non-reasoning")
+        chat = client.chat.create(model=MODEL_NAME)
         chat.append(system("You are a helpful research assistant."))
         chat.append(user(prompt))
         

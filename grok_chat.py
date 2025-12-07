@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+MODEL_NAME = "grok-4-1-fast-non-reasoning"
+
 XAI_API_KEY = os.getenv("XAI_API_KEY")
 
 # Initialize xAI client (uses OpenAI SDK with custom base URL)
@@ -30,7 +32,7 @@ async def stream_chat_response(messages: list[dict], websocket):
     try:
         # Create streaming chat completion
         stream = await client.chat.completions.create(
-            model="grok-4-1-fast-non-reasoning",
+            model=MODEL_NAME,
             messages=messages,
             stream=True,
             temperature=0.7,
