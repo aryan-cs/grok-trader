@@ -51,11 +51,18 @@ def fetch_grokipedia_article(topic: str, verbose: bool = False):
     url = f"https://grokipedia.com/page/{topic.replace(' ', '_')}"
     scraped_content = None
     
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    
     try:
         if verbose:
             console.print(f"Fetching from {url}...")
         
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, headers=headers, timeout=5)
+        if verbose and response.status_code != 200:
+            console.print(f"[red]Grokipedia returned status code: {response.status_code}[/red]")
+
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
             content_div = soup.find('article') or \
@@ -69,7 +76,10 @@ def fetch_grokipedia_article(topic: str, verbose: bool = False):
 
                 text = content_div.get_text(separator='\n', strip=True)
                 
-                text = re.sub(r'\[\d+\]', '', text)
+                text = re.sub(r'\[\s*(?:\d+|edit)\s*\]', '', text)
+                
+                # Fix spaces before punctuation
+                text = re.sub(r'\s+([.,;!?])', r'\1', text)
                 
                 text = re.sub(r'\n{3,}', '\n\n', text)
                 
@@ -96,6 +106,61 @@ def fetch_grokipedia_article(topic: str, verbose: bool = False):
             "timestamp": timestamp,
             "source": "Grokipedia.com"
         }
+
+    if verbose:
+        console.print("[yellow]Article not found on Grokipedia. Checking Wikipedia...[/yellow]")
+
+    wiki_url = f"https://en.wikipedia.org/wiki/{topic.replace(' ', '_')}"
+    
+    try:
+        if verbose:
+            console.print(f"Fetching from {wiki_url}...")
+            
+        response = requests.get(wiki_url, headers=headers, timeout=5)
+        if verbose and response.status_code != 200:
+            console.print(f"[red]Wikipedia returned status code: {response.status_code}[/red]")
+
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            content_div = soup.find('div', {'class': 'mw-parser-output'}) or \
+                          soup.find('div', {'id': 'mw-content-text'})
+            
+            if content_div:
+                for element in content_div(['script', 'style', 'nav', 'footer', 'header', 'aside', 'table']):
+                    element.decompose()
+
+                text = content_div.get_text(separator='\n', strip=True)
+                
+                text = re.sub(r'\[\s*(?:\d+|edit)\s*\]', '', text)
+                
+                # Fix spaces before punctuation
+                text = re.sub(r'\s+([.,;!?])', r'\1', text)
+                
+                text = re.sub(r'\n{3,}', '\n\n', text)
+                
+                scraped_content = text.strip()
+                
+                if scraped_content:
+                    timestamp = datetime.now().isoformat()
+                    save_to_csv(topic, scraped_content, timestamp)
+                    
+                    if verbose:
+                        panel = Panel(
+                            Markdown(scraped_content[:2000] + "..."),
+                            title=f"Wikipedia: {topic}",
+                            border_style="green"
+                        )
+                        console.print(panel)
+                        
+                    return {
+                        "topic": topic,
+                        "content": scraped_content,
+                        "timestamp": timestamp,
+                        "source": "Wikipedia"
+                    }
+    except Exception as e:
+        if verbose:
+            console.print(f"[red]Error scraping Wikipedia:[/red] {e}")
 
     if verbose:
         console.print("[yellow]Article not found on Web. Generating with Grok...[/yellow]")
@@ -150,7 +215,7 @@ def fetch_grokipedia_article(topic: str, verbose: bool = False):
 
 get_grokipedia_article_tool = tool(
     name="fetch_grokipedia_article",
-    description="Retrieves a comprehensive encyclopedia-style article on a given topic from Grokipedia.com (or generates one if not found).",
+    description="Retrieves a comprehensive encyclopedia-style article on a given topic from Grokipedia.com or Wikipedia (or generates one if not found).",
     parameters={
         "type": "object",
         "properties": {
@@ -164,4 +229,4 @@ get_grokipedia_article_tool = tool(
 )
 
 if __name__ == "__main__":
-    fetch_grokipedia_article("Prediction market", verbose=True)
+    fetch_grokipedia_article("Polymarket", verbose=True)
