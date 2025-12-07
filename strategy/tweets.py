@@ -73,7 +73,7 @@ class TweetFeed:
         return new_tweets
 
     def run_once(self):
-        self.fetch_and_process()
+        return self.fetch_and_process()
 
 
 def __main__():
@@ -89,8 +89,8 @@ def __main__():
         max_results=10
     )
 
-    feed.run_once()
-    
+    new_tweets = feed.run_once()
+    # print(f"Fetched {len(new_tweets)} new tweets")
 
 if __name__ == "__main__":
     __main__()
