@@ -1,12 +1,17 @@
 import os
+import sys
 import json
 import re
+import csv
+from datetime import datetime
 from dotenv import load_dotenv
 from xai_sdk import Client
 from xai_sdk.chat import user, system
 from rich.console import Console
 from rich.table import Table
 from rich.progress import track
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from datafeed.x.x import load_tweets
 from datafeed.reddit.reddit import load_posts
@@ -25,6 +30,15 @@ except Exception as e:
     console.print("[yellow]Make sure 'xai-sdk' is installed: pip install xai-sdk[/yellow]")
     client = None
 
+def load_prompt(filename):
+    try:
+        prompt_path = os.path.join(os.path.dirname(__file__), "prompts", filename)
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception as e:
+        console.print(f"[red]Error loading prompt {filename}: {e}[/red]")
+        return ""
+
 def analyze_text(text, source, market=None):
     if not client:
         return {"is_useful": False, "reason": "Client not initialized", "sentiment": "neutral"}
@@ -33,16 +47,10 @@ def analyze_text(text, source, market=None):
         chat = client.chat.create(model=MODEL_NAME)
         
         if market:
-            sys_prompt = (
-                f"You are a prediction market analyst. The market question is: '{market}'. "
-                "Analyze the input text. Determine if it provides insight into the outcome of this market. "
-                "Return ONLY a JSON object with keys: "
-                "'is_useful' (boolean), "
-                "'reason' (short string explaining relevance to the market question), "
-                "'sentiment' (string: 'positive' if it supports YES, 'negative' if it supports NO, 'neutral' if irrelevant)."
-            )
+            prompt_template = load_prompt("market_filter_prompt.txt")
+            sys_prompt = prompt_template.format(market=market)
         else:
-            sys_prompt = "You are a financial data filter. Analyze the input text. Determine if it contains useful signal for market analysis or trading. Return ONLY a JSON object with keys: 'is_useful' (boolean), 'reason' (short string), 'sentiment' (string: positive/negative/neutral)."
+            sys_prompt = load_prompt("financial_filter_prompt.txt")
         
         chat.append(system(sys_prompt))
         chat.append(user(f"Source: {source}\nText: {text}"))
@@ -60,9 +68,7 @@ def analyze_text(text, source, market=None):
         return {"is_useful": False, "reason": f"Error: {str(e)}", "sentiment": "neutral"}
 
 def normalize_data(tweets, posts, articles):
-    """
-    Normalizes data from different sources into a common format.
-    """
+
     all_items = []
     
     for t in tweets:
@@ -92,9 +98,7 @@ def normalize_data(tweets, posts, articles):
     return all_items
 
 def run_analysis(items, market_question):
-    """
-    Runs the analysis on the normalized items.
-    """
+
     results = []
     console.print(f"\n[yellow]Analyzing with Grok {MODEL_NAME} for market: '{market_question}'...[/yellow]")
     
@@ -110,6 +114,38 @@ def run_analysis(items, market_question):
         })
         
     return results
+
+def save_results_to_csv(results, filename="analysis_results.csv"):
+
+    if not results:
+        console.print("[yellow]No results to save.[/yellow]")
+        return
+
+    file_exists = os.path.isfile(filename)
+    
+    try:
+        with open(filename, mode='a', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            
+            if not file_exists:
+                writer.writerow(["timestamp", "source", "meta", "text", "sentiment", "is_useful", "reason"])
+            
+            timestamp = datetime.now().isoformat()
+            
+            for res in results:
+                writer.writerow([
+                    timestamp,
+                    res.get('source', ''),
+                    res.get('meta', ''),
+                    res.get('text', '').replace('\n', ' '),
+                    res.get('sentiment', ''),
+                    res.get('is_useful', False),
+                    res.get('reason', '')
+                ])
+                
+        console.print(f"[bold green]Saved results to {filename}[/bold green]")
+    except Exception as e:
+        console.print(f"[bold red]Error saving to CSV:[/bold red] {e}")
 
 def display_analysis(results):
     console.print(f"\n[bold blue]Analysis Complete. Processed {len(results)} items:[/bold blue]\n")
@@ -141,8 +177,8 @@ def main():
     console.print("\n[yellow]Fetching data from local CSVs...[/yellow]")
     
     tweets = load_tweets()[-10:] 
-    posts = []
-    articles = []
+    posts = load_posts()[-10:] 
+    articles = load_articles()[-10:]
     
     all_items = normalize_data(tweets, posts, articles)
 
@@ -152,6 +188,7 @@ def main():
     results = run_analysis(all_items, test_market)
 
     display_analysis(results)
+    save_results_to_csv(results)
 
 if __name__ == "__main__":
     main()

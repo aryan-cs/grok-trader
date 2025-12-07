@@ -215,6 +215,7 @@ def fetch_posts(keywords=None,
         data = response.json()
         posts_data = data.get('data', {}).get('children', [])
 
+        fetched_posts = []
         count = 0
         for item in posts_data:
             submission = item['data']
@@ -240,14 +241,32 @@ def fetch_posts(keywords=None,
             
             display_post(post, user)
             save_to_csv(post, user)
+            
+            fetched_posts.append({
+                "post_id": post.id,
+                "created_utc": post.created_utc,
+                "author": post.author,
+                "subreddit": post.subreddit,
+                "title": post.title,
+                "text": post.text,
+                "score": metrics['score'],
+                "comments": metrics['num_comments'],
+                "upvote_ratio": metrics['upvote_ratio'],
+                "url": post.url
+            })
+            
             count += 1
             
         if count > 0:
             console.print(f"\n[bold green]Success![/bold green] Saved {count} posts to {CSV_FILE}")
         else:
             console.print("[bold red]No posts found matching criteria.[/bold red]")
+            
+        return fetched_posts
 
     except Exception as e:
+        console.print(f"[bold red]An error occurred:[/bold red] {e}")
+        return []
         console.print(f"[bold red]An error occurred:[/bold red] {e}")
 
 def load_posts(keywords=None, 

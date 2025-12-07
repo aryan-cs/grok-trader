@@ -88,13 +88,6 @@ def load_from_csv():
         console.print(f"\n[bold green]Displayed {count} articles from CSV.[/bold green]")
 
 def fetch_articles(keywords=None, limit=10):
-    """
-    Fetches articles from Reuters using Google News RSS feed.
-    
-    Args:
-        keywords (list): List of keywords to search for.
-        limit (int): Number of articles to return.
-    """
     if not keywords:
         console.print("[bold red]Error:[/bold red] Keywords are required for search.")
         return
@@ -117,6 +110,7 @@ def fetch_articles(keywords=None, limit=10):
         channel = root.find("channel")
         items = channel.findall("item")
         
+        fetched_articles = []
         count = 0
         for item in items[:limit]:
             title = item.find("title").text if item.find("title") is not None else "No Title"
@@ -141,12 +135,25 @@ def fetch_articles(keywords=None, limit=10):
             
             display_article(article)
             save_to_csv(article)
+            
+            fetched_articles.append({
+                "title": article.title,
+                "link": article.link,
+                "published": article.published,
+                "summary": article.summary
+            })
+            
             count += 1
             
         if count > 0:
             console.print(f"\n[bold green]Success![/bold green] Saved {count} articles to {CSV_FILE}")
         else:
             console.print("[bold red]No articles found matching criteria.[/bold red]")
+            
+        return fetched_articles
+    except Exception as e:
+        console.print(f"[bold red]An error occurred:[/bold red] {e}")
+        return []
 
     except Exception as e:
         console.print(f"[bold red]An error occurred:[/bold red] {e}")

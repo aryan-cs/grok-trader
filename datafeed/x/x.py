@@ -237,6 +237,7 @@ def fetch_tweets(keywords=None,
             user_fields=['username', 'name', 'public_metrics']
         )
 
+        fetched_tweets = []
         if response.data:
             users = {u.id: u for u in response.includes['users']} if response.includes else {}
 
@@ -246,13 +247,33 @@ def fetch_tweets(keywords=None,
                 display_tweet(tweet, user)
                 
                 save_to_csv(tweet, user)
+                
+                # Prepare dict for return
+                fetched_tweets.append({
+                    "tweet_id": tweet.id,
+                    "created_at": tweet.created_at.isoformat() if tweet.created_at else "",
+                    "author_id": tweet.author_id,
+                    "username": user.username if user else "unknown",
+                    "name": user.name if user else "unknown",
+                    "text": tweet.text,
+                    "likes": tweet.public_metrics.get('like_count', 0),
+                    "retweets": tweet.public_metrics.get('retweet_count', 0),
+                    "replies": tweet.public_metrics.get('reply_count', 0),
+                    "quotes": tweet.public_metrics.get('quote_count', 0),
+                    "impressions": tweet.public_metrics.get('impression_count', 0),
+                    "lang": tweet.lang,
+                    "url": f"https://twitter.com/{user.username}/status/{tweet.id}" if user else ""
+                })
             
             console.print(f"\n[bold green]Success![/bold green] Saved {len(response.data)} tweets to {CSV_FILE}")
         else:
             console.print("[bold red]No tweets found matching criteria.[/bold red]")
+            
+        return fetched_tweets
 
     except Exception as e:
         console.print(f"[bold red]An error occurred:[/bold red] {e}")
+        return []
 
 def load_tweets(keywords=None, 
                         usernames=None, 
