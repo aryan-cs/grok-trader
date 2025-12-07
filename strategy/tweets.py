@@ -5,9 +5,14 @@ from pathlib import Path
 from xai_sdk import Client
 
 verbose = False
+_QUERY_CACHE: dict[tuple[str, str], str] = {}
 
 
 def generate_query(source, slug):
+    key = (source, slug or "")
+    if key in _QUERY_CACHE:
+        return _QUERY_CACHE[key]
+
     xai_api_key = os.getenv("XAI_API_KEY")
     if not xai_api_key:
         raise RuntimeError("XAI_API_KEY not found in environment")
@@ -25,7 +30,9 @@ def generate_query(source, slug):
         )
         chat.append(user_msg)
         resp = chat.sample()
-        return getattr(resp, "content", None)
+        query = (getattr(resp, "content", "") or "").strip()
+        _QUERY_CACHE[key] = query
+        return query
     elif source == "reddit":
         system_msg = system(
             "You are an expert at writing Reddit search queries. Given a market slug, return a JSON object with two fields: 'subreddits' (list of relevant subreddits) and 'keywords' (list of relevant keywords). Return only the JSON object."
@@ -39,9 +46,11 @@ def generate_query(source, slug):
         import json
 
         try:
-            return json.loads(getattr(resp, "content", "{}"))
+            parsed = json.loads(getattr(resp, "content", "{}"))
         except Exception:
-            return {}
+            parsed = {}
+        _QUERY_CACHE[key] = parsed
+        return parsed
     elif source == "reuters":
         system_msg = system(
             "You are an expert at writing Google News queries for Reuters. Given a market slug, generate a query string suitable for Google News RSS search, using relevant keywords. Return only the query string."
@@ -52,7 +61,9 @@ def generate_query(source, slug):
         )
         chat.append(user_msg)
         resp = chat.sample()
-        return getattr(resp, "content", None)
+        query = (getattr(resp, "content", "") or "").strip()
+        _QUERY_CACHE[key] = query
+        return query
     return None
 
 
@@ -85,7 +96,8 @@ class TweetFeed:
         # keywords = self.market_slug.split('-') if self.market_slug else []
         # query = f"({' OR '.join(keywords)}) lang:en -is:retweet"
         # return query
-        return generate_query("x", self.market_slug) + "-is:retweet lang:en"
+        base = generate_query("x", self.market_slug) or ""
+        return f"{base} -is:retweet lang:en".strip()
 
     def fetch_and_process(self):
         query = self.build_query()
