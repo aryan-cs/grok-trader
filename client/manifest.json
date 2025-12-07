@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Grok Trader",
+  "version": "1.0.0",
+  "description": "AI-powered prediction market analysis for Polymarket",
+  "permissions": [
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://polymarket.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://polymarket.com/event/*"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["sidebar.html", "sidebar.js", "sidebar.css"],
+      "matches": ["https://polymarket.com/*"]
+    }
+  ]
+}
