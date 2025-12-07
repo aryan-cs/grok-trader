@@ -99,6 +99,8 @@ class Strategy:
                 list(self.tweets),
             )
             print(f"[decision][{self.market_slug}] {decision}")
+            if decision.response:
+                print(f"[grok_response] {decision.response}")
 
             if self.client and decision.action != "hold" and decision.size > 0:
                 token_id = (
