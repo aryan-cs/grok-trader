@@ -111,8 +111,7 @@ class OrderBook:
 
 
 class OrderBookStrategy(Protocol):
-    def on_order_book(self, market: str, order_book: OrderBook) -> None:
-        ...
+    def on_order_book(self, market: str, order_book: OrderBook) -> None: ...
 
 
 class NoOpStrategy:
@@ -172,6 +171,37 @@ class PolymarketFeed:
             for side, token in sides.items():
                 token_ids.append(token)
                 self.token_lookup[token] = (slug, side)
+        self.subscribe(token_ids)
+
+    def subscribe_market(self, market_slug: str, event_slug: str | None = None) -> None:
+        """
+        Subscribe only to one market within an event.
+        If no event data is loaded yet, pass event_slug to fetch it first.
+        """
+        if not self.market_tokens:
+            if not event_slug:
+                raise ValueError(
+                    "No event data loaded. Call subscribe_event first or provide event_slug."
+                )
+            self.subscribe_event(event_slug)
+
+        if market_slug not in self.market_tokens:
+            if event_slug:
+                self.subscribe_event(event_slug)
+            if market_slug not in self.market_tokens:
+                raise KeyError(
+                    f"Market slug '{market_slug}' not found in current event."
+                )
+
+        market_tokens = self.market_tokens[market_slug]
+        # Limit scope to just this market for downstream reporting
+        self.market_tokens = {market_slug: market_tokens}
+        token_ids: list[str] = []
+        self.token_lookup = {}
+        for side, token in market_tokens.items():
+            token_ids.append(token)
+            self.token_lookup[token] = (market_slug, side)
+
         self.subscribe(token_ids)
 
     def _on_open(self, ws) -> None:
