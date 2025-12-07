@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import uvicorn
 import json
 from grok_chat import stream_chat_response
+from grok_research import research_market, research_followup
 
 app = FastAPI()
 
@@ -27,6 +28,17 @@ class ChatRequest(BaseModel):
     event_slug: str | None = None
 
 
+class ResearchRequest(BaseModel):
+    client_id: str
+    market_title: str
+    custom_notes: str = ""
+
+
+class ResearchFollowupRequest(BaseModel):
+    client_id: str
+    messages: list[dict]  # Full conversation history
+
+
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     """Handle chat message POST requests and stream responses via WebSocket"""
@@ -42,6 +54,51 @@ async def chat_endpoint(request: ChatRequest):
 
     # Stream the response via WebSocket
     await stream_chat_response(request.messages, websocket)
+
+    return {"status": "streaming"}
+
+
+@app.post("/research")
+async def research_endpoint(request: ResearchRequest):
+    """Handle market research requests and stream responses via WebSocket"""
+    client_id = request.client_id
+
+    # Check if WebSocket connection exists
+    if client_id not in websocket_connections:
+        return {"error": "WebSocket not connected. Please establish WebSocket connection first."}
+
+    websocket = websocket_connections[client_id]
+
+    print(f"🔬 Research request from {client_id}: {request.market_title}")
+
+    # Stream the research via WebSocket
+    await research_market(
+        websocket=websocket,
+        market_title=request.market_title,
+        market_rules="",
+        custom_instructions=request.custom_notes,
+        yes_price=500,
+        no_price=500
+    )
+
+    return {"status": "streaming"}
+
+
+@app.post("/research/followup")
+async def research_followup_endpoint(request: ResearchFollowupRequest):
+    """Handle research follow-up questions and stream responses via WebSocket"""
+    client_id = request.client_id
+
+    # Check if WebSocket connection exists
+    if client_id not in websocket_connections:
+        return {"error": "WebSocket not connected. Please establish WebSocket connection first."}
+
+    websocket = websocket_connections[client_id]
+
+    print(f"💬 Research follow-up from {client_id}: {len(request.messages)} messages")
+
+    # Stream the follow-up response via WebSocket
+    await research_followup(websocket, request.messages)
 
     return {"status": "streaming"}
 

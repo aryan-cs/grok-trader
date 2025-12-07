@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './Sidebar.css';
 import Chat from './Chat';
+import DeepResearch from './DeepResearch';
 
 const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -61,14 +62,8 @@ const Sidebar = () => {
         }
       };
 
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('Received from server:', data);
-        } catch (e) {
-          console.error('Error parsing server message:', e);
-        }
-      };
+      // Note: Message handling is done in Chat.jsx and DeepResearch.jsx
+      // using addEventListener, so we don't set onmessage here
 
       ws.onerror = (error) => {
         console.error('❌ WebSocket error:', error);
@@ -201,12 +196,11 @@ const Sidebar = () => {
             )}
 
             {activeTab === 'research' && (
-              <div className="grok-section">
-                <h3>Deep Research</h3>
-                <div className="grok-recommendation-placeholder">
-                  <p>Deep research coming soon...</p>
-                </div>
-              </div>
+              <DeepResearch
+                eventSlug={eventSlug}
+                websocket={wsRef.current}
+                clientId={clientId}
+              />
             )}
           </div>
       </div>
