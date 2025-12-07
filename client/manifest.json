@@ -18,7 +18,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["sidebar.html", "sidebar.js", "sidebar.css"],
+      "resources": ["sidebar.html", "sidebar.js", "sidebar.css", "xAI_Logomark_Light.png"],
       "matches": ["https://polymarket.com/*"]
     }
   ]
