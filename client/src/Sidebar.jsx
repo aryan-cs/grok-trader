@@ -9,6 +9,8 @@ const Sidebar = () => {
   const [eventSlug, setEventSlug] = useState(null);
   const [activeTab, setActiveTab] = useState('feed');
   const [chatMessages, setChatMessages] = useState([]);
+  const [sentimentItems, setSentimentItems] = useState([]);
+  const [feedLoading, setFeedLoading] = useState(true);
   const [clientId] = useState(() => `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
   const [marketSlugs, setMarketSlugs] = useState([]);
   const [selectedMarket, setSelectedMarket] = useState(null);
@@ -96,6 +98,42 @@ const Sidebar = () => {
     };
   }, []);
 
+  // Listen for feed (sentiment items) messages
+  useEffect(() => {
+    const ws = wsRef.current;
+    if (!ws) return;
+
+    const handleFeedMessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.message_type !== 'feed') return;
+
+        console.log('📥 Feed message received:', data);
+
+        if (data.type === 'sentiment_items') {
+          setSentimentItems(data.items || []);
+          setFeedLoading(false);
+        } else if (data.type === 'sentiment_item') {
+          setSentimentItems(prev => {
+            // Avoid duplicates based on link or content
+            const exists = prev.some(p => p.link === data.item.link && p.content === data.item.content);
+            if (exists) return prev;
+            return [...prev, data.item];
+          });
+          setFeedLoading(false);
+        } else if (data.type === 'error') {
+          console.error('⚠️ Feed error message:', data.error);
+          setFeedLoading(false);
+        }
+      } catch (err) {
+        console.error('Error parsing feed message:', err);
+      }
+    };
+
+    ws.addEventListener('message', handleFeedMessage);
+    return () => ws.removeEventListener('message', handleFeedMessage);
+  }, [wsStatus]);
+
   // Fetch market slugs when event slug changes
   useEffect(() => {
     const fetchMarkets = async () => {
@@ -112,6 +150,10 @@ const Sidebar = () => {
 
         if (data.status === 'success') {
           setMarketSlugs(data.market_slugs);
+          // Auto-select the first market so feed can populate immediately
+          if (!selectedMarket && data.market_slugs.length > 0) {
+            setSelectedMarket(data.market_slugs[0]);
+          }
           console.log('📊 Fetched markets:', data.market_slugs);
         } else {
           console.error('Error fetching markets:', data.error);
@@ -128,6 +170,23 @@ const Sidebar = () => {
     fetchMarkets();
   }, [eventSlug]);
 
+  // When a market is selected and WebSocket is ready, request feed data immediately
+  useEffect(() => {
+    if (!selectedMarket) return;
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+
+    setFeedLoading(true);
+    setSentimentItems([]);
+
+    wsRef.current.send(JSON.stringify({
+      type: 'feed_request',
+      market_title: selectedMarket,
+      client_id: clientId,
+    }));
+
+    console.log('📤 Sent feed request for market:', selectedMarket, 'client:', clientId);
+  }, [selectedMarket, wsStatus]);
+
   // Reset state when navigating to a new event
   useEffect(() => {
     if (eventSlug && previousEventSlug.current && eventSlug !== previousEventSlug.current) {
@@ -135,10 +194,27 @@ const Sidebar = () => {
       setActiveTab('feed');
       setChatMessages([]);
       setSelectedMarket(null);
+      setSentimentItems([]);
+      setFeedLoading(false);
       console.log('🔄 Navigated to new event, resetting state:', eventSlug);
     }
     previousEventSlug.current = eventSlug;
   }, [eventSlug]);
+
+  const handleResearchStart = () => {
+    setFeedLoading(true);
+    setSentimentItems([]);
+  };
+
+  // Failsafe: if feed loading hangs, stop spinner after 12s
+  useEffect(() => {
+    if (!feedLoading) return;
+    const t = setTimeout(() => {
+      console.warn('⏳ Feed loading timed out; stopping spinner');
+      setFeedLoading(false);
+    }, 12000);
+    return () => clearTimeout(t);
+  }, [feedLoading]);
 
   const handleCollapse = () => {
     setIsCollapsed(true);
@@ -233,10 +309,40 @@ const Sidebar = () => {
               <>
                 <div className="grok-section">
                   <h3>Market Analysis</h3>
-                  <div className="grok-loading">
-                    <div className="grok-spinner"></div>
-                    <p>Analyzing market...</p>
-                  </div>
+                  {feedLoading ? (
+                    <div className="grok-loading">
+                      <div className="grok-spinner"></div>
+                      <p>Analyzing market...</p>
+                    </div>
+                  ) : sentimentItems.length === 0 ? (
+                    <div className="grok-placeholder">No signals yet. Signals load automatically when a market is selected.</div>
+                  ) : (
+                    <div className="grok-feed-list">
+                      {sentimentItems.map((item, idx) => {
+                        const sentiment = (item.sentiment || 'neutral').toLowerCase();
+                        const source = item.source || 'tweet';
+                        const author = item.meta || item.username || 'unknown';
+                        const label = `${source} • ${author}`;
+                        return (
+                          <div
+                            key={item.link || `${source}-${idx}`}
+                            className={`grok-feed-card sentiment-${sentiment}`}
+                          >
+                            <div className="grok-feed-card-header">
+                              <span className="grok-feed-source">{label}</span>
+                              <span className={`grok-feed-pill sentiment-${sentiment}`}>
+                                {(item.sentiment || 'neutral').toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="grok-feed-text">{item.content}</div>
+                            {item.reasoning && (
+                              <div className="grok-feed-reason">{item.reasoning}</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div className="grok-section">
@@ -271,6 +377,7 @@ const Sidebar = () => {
                 selectedMarket={selectedMarket}
                 websocket={wsRef.current}
                 clientId={clientId}
+                onResearchStart={handleResearchStart}
               />
             )}
           </div>

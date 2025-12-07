@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 
-const DeepResearch = ({ eventSlug, selectedMarket, websocket, clientId }) => {
+const DeepResearch = ({ eventSlug, selectedMarket, websocket, clientId, onResearchStart }) => {
   const [customNotes, setCustomNotes] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [thinkingMessages, setThinkingMessages] = useState([]);
@@ -122,6 +122,10 @@ const DeepResearch = ({ eventSlug, selectedMarket, websocket, clientId }) => {
       return;
     }
 
+    if (onResearchStart) {
+      onResearchStart();
+    }
+
     setIsGenerating(true);
     setThinkingMessages([]);
     setReport('');
@@ -129,27 +133,22 @@ const DeepResearch = ({ eventSlug, selectedMarket, websocket, clientId }) => {
     reportStreamRef.current = '';
 
     try {
-      const response = await fetch('http://localhost:8765/research', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Send request via WebSocket instead of HTTP POST to avoid Mixed Content issues
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        websocket.send(JSON.stringify({
+          type: 'research_request',
           client_id: clientId,
           market_title: selectedMarket,
           custom_notes: customNotes
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        }));
+        console.log('📤 Sent research request via WebSocket');
+      } else {
+        throw new Error('WebSocket not connected');
       }
-
-      console.log('📤 Sent research request, waiting for stream...');
     } catch (error) {
       console.error('Error sending research request:', error);
       setIsGenerating(false);
-      setReport('Error: Failed to send research request');
+      setReport(`Error: ${error.message}`);
     }
   };
 

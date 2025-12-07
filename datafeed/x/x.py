@@ -37,46 +37,55 @@ class Tweet:
         self.author_id = author_id
 
 def save_to_csv(tweet, user):
-    file_exists = os.path.isfile(CSV_FILE)
-    
-    # Check for duplicates
-    if file_exists:
-        try:
-            with open(CSV_FILE, mode='r', encoding='utf-8') as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    if row.get("tweet_id") == str(tweet.id):
-                        return
-        except Exception:
-            pass
-    
-    with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as file:
-        writer = csv.writer(file)
+    try:
+        file_exists = os.path.isfile(CSV_FILE)
         
-        if not file_exists:
-            writer.writerow([
-                "tweet_id", "created_at", "author_id", "username", "name", 
-                "text", "likes", "retweets", "replies", "quotes", "impressions", "lang", "url"
-            ])
+        # Check for duplicates
+        if file_exists:
+            try:
+                with open(CSV_FILE, mode='r', encoding='utf-8') as file:
+                    reader = csv.DictReader(file)
+                    for row in reader:
+                        if row.get("tweet_id") == str(tweet.id):
+                            # console.print(f"[dim]Skipping duplicate tweet {tweet.id}[/dim]")
+                            return
+            except Exception as e:
+                console.print(f"[red]Error reading CSV for duplicates: {e}[/red]")
+        
+        with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
             
-        metrics = tweet.public_metrics or {}
-        url = f"https://x.com/{user.username}/status/{tweet.id}" if user else ""
-        
-        writer.writerow([
-            tweet.id,
-            tweet.created_at,
-            tweet.author_id,
-            user.username if user else "Unknown",
-            user.name if user else "Unknown",
-            tweet.text.replace('\n', ' '),
-            metrics.get('like_count', 0),
-            metrics.get('retweet_count', 0),
-            metrics.get('reply_count', 0),
-            metrics.get('quote_count', 0),
-            metrics.get('impression_count', 0),
-            tweet.lang,
-            url
-        ])
+            if not file_exists:
+                writer.writerow([
+                    "tweet_id", "created_at", "author_id", "username", "name", 
+                    "text", "likes", "retweets", "replies", "quotes", "impressions", "lang", "url"
+                ])
+                
+            metrics = tweet.public_metrics or {}
+            url = f"https://x.com/{user.username}/status/{tweet.id}" if user else ""
+            
+            # Ensure created_at is a string
+            created_at_str = tweet.created_at.isoformat() if hasattr(tweet.created_at, 'isoformat') else str(tweet.created_at)
+
+            writer.writerow([
+                tweet.id,
+                created_at_str,
+                tweet.author_id,
+                user.username if user else "Unknown",
+                user.name if user else "Unknown",
+                tweet.text.replace('\n', ' '),
+                metrics.get('like_count', 0),
+                metrics.get('retweet_count', 0),
+                metrics.get('reply_count', 0),
+                metrics.get('quote_count', 0),
+                metrics.get('impression_count', 0),
+                tweet.lang,
+                url
+            ])
+            # console.print(f"[dim]Saved tweet {tweet.id} to CSV[/dim]")
+            
+    except Exception as e:
+        console.print(f"[bold red]Error saving to CSV:[/bold red] {e}")
 
 def display_tweet(tweet, user):
     
@@ -188,10 +197,8 @@ def build_query(keywords=None, usernames=None, logic="AND", min_likes=0, min_ret
         entity_queries = [f'entity:"{e}"' for e in entities]
         parts.append(f"({' OR '.join(entity_queries)})")
         
-    if min_likes > 0:
-        parts.append(f"min_faves:{min_likes}")
-    if min_retweets > 0:
-        parts.append(f"min_retweets:{min_retweets}")
+    # Note: min_faves and min_retweets are not supported in standard v2 recent search query
+    # We will filter these client-side instead.
         
     parts.append(f"lang:{lang}")
     parts.append("-is:retweet")
@@ -202,7 +209,7 @@ def fetch_tweets(keywords=None,
                  usernames=None, 
                  start_time=None, 
                  end_time=None, 
-                 logic="AND", 
+                 logic="OR", 
                  min_likes=0, 
                  min_retweets=0, 
                  entities=None, 
@@ -248,11 +255,47 @@ def fetch_tweets(keywords=None,
             user_fields=['username', 'name', 'public_metrics']
         )
 
+        # Auto-Retry Logic: If no results and logic is AND, try OR
+        if not response.data and logic.upper() == "AND" and keywords and len(keywords) > 1:
+            console.print("[bold yellow]No results with AND logic. Retrying with OR logic...[/bold yellow]")
+            query = build_query(keywords, usernames, "OR", min_likes, min_retweets, entities)
+            response = search_function(
+                query=query, 
+                start_time=start_time,
+                end_time=end_time,
+                max_results=max_results,
+                tweet_fields=['created_at', 'public_metrics', 'lang', 'author_id'],
+                expansions=['author_id'],
+                user_fields=['username', 'name', 'public_metrics']
+            )
+
+        # Auto-Retry Logic: If still no results and we have many keywords, try simplified query (first 3 keywords)
+        if not response.data and keywords and len(keywords) > 3:
+            console.print("[bold yellow]No results. Retrying with simplified keywords (first 3)...[/bold yellow]")
+            simple_keywords = keywords[:3]
+            query = build_query(simple_keywords, usernames, "OR", min_likes, min_retweets, entities)
+            response = search_function(
+                query=query, 
+                start_time=start_time,
+                end_time=end_time,
+                max_results=max_results,
+                tweet_fields=['created_at', 'public_metrics', 'lang', 'author_id'],
+                expansions=['author_id'],
+                user_fields=['username', 'name', 'public_metrics']
+            )
+
         fetched_tweets = []
         if response.data:
             users = {u.id: u for u in response.includes['users']} if response.includes else {}
 
             for tweet in response.data:
+                # Client-side filtering for metrics (since API doesn't support it in query)
+                likes = tweet.public_metrics.get('like_count', 0)
+                retweets = tweet.public_metrics.get('retweet_count', 0)
+                
+                if likes < min_likes or retweets < min_retweets:
+                    continue
+
                 user = users.get(tweet.author_id)
                 
                 display_tweet(tweet, user)
@@ -276,7 +319,7 @@ def fetch_tweets(keywords=None,
                     "url": f"https://twitter.com/{user.username}/status/{tweet.id}" if user else ""
                 })
             
-            console.print(f"\n[bold green]Success![/bold green] Saved {len(response.data)} tweets to {CSV_FILE}")
+            console.print(f"\n[bold green]Success![/bold green] Processed {len(fetched_tweets)} tweets (filtered from {len(response.data)} raw) to {CSV_FILE}")
         else:
             console.print("[bold red]No tweets found matching criteria.[/bold red]")
             
@@ -290,7 +333,7 @@ def load_tweets(keywords=None,
                         usernames=None, 
                         start_time=None, 
                         end_time=None, 
-                        logic="AND", 
+                        logic="OR", 
                         min_likes=0, 
                         min_retweets=0, 
                         lang=None):
@@ -348,7 +391,7 @@ def load_tweets(keywords=None,
                 text = row.get("text", "").lower()
                 keyword_matches = [k.lower() in text for k in keywords]
                 
-                if logic.upper() == "AND":
+                if logic.upper() == "OR":
                     if not all(keyword_matches):
                         continue
                 else: # OR
@@ -377,11 +420,20 @@ def main():
     """
     
     fetch_tweets(
-        usernames=["elonmusk"],
-        start_time="2025-03-03T00:00:00Z",
-        end_time="2025-04-25T00:00:00Z",
+        # usernames=["elonmusk"],
+        # start_time="2025-03-03T00:00:00Z",
+        # end_time="2025-04-25T00:00:00Z",
         max_results=MIN_TWEETS,
-        full_archive=True
+        full_archive=False
+    )
+    
+    fetch_tweets(
+        # keywords=["cut", "decision", "fed", "rates"],  # or usernames=[...]
+        keywords = ['Fed', 'interest', 'rates', 'FOMC', 'December', '2025', '50', 'bps', 'cut', 'Federal', 'Reserve', 'meeting'],
+        # start_time="2025-06-07T00:00:00Z",
+        # end_time="2025-11-30T11:57:00Z",
+        max_results=MIN_TWEETS,
+        full_archive=False  # required for dates older than ~7 days
     )
     
     # fetch_tweets(

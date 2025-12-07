@@ -50,7 +50,7 @@ def generate_search_terms(market: str, client):
         print(f"Error generating search terms: {e}")
         return {"keywords": [], "subreddits": []}
 
-def get_market_sentiment(market: str = None, contracts: list = None, start_date: str = None, end_date: str = None, limit: int = 20, verbose: bool = False, accounts: list = None):
+def get_market_sentiment(market: str = None, contracts: list = None, start_date: str = None, end_date: str = None, limit: int = 20, verbose: bool = False, accounts: list = None, on_item=None):
     """
     Fetches and analyzes social media and news data for a specific market.
     
@@ -62,6 +62,7 @@ def get_market_sentiment(market: str = None, contracts: list = None, start_date:
         limit (int, optional): Max number of items to fetch per source. Default 20.
         verbose (bool, optional): Whether to print progress updates.
         accounts (list, optional): List of X accounts to prioritize/filter by.
+        on_item (callable, optional): Callback function to be called with each analyzed item.
         
     Returns:
         list: A list of relevant, analyzed items with sentiment and reasoning.
@@ -84,52 +85,60 @@ def get_market_sentiment(market: str = None, contracts: list = None, start_date:
         subreddits = []
         
         if market:
-            if verbose:
-                print("Generating search terms with Grok...")
+            print(f"Generating search terms with Grok for: {market}")
             search_config = generate_search_terms(market, client)
             keywords = search_config.get("keywords", [])
             subreddits = search_config.get("subreddits", [])
-            
-            if verbose:
-                print(f"Keywords: {keywords}")
-                print(f"Subreddits: {subreddits}")
+
+            # Ensure we have keywords
+            if not keywords:
+                print("⚠️ No keywords generated, using market title words.")
+                keywords = [w for w in market.split() if len(w) > 3]
+
+            print(f"Keywords (Phrases): {keywords}")
+            print(f"Subreddits: {subreddits}")
         
         if keywords or accounts:
-            if verbose:
-                print("Fetching fresh Tweets...")
+            print("Fetching fresh Tweets...")
+            # We request up to 100 tweets to ensure we find enough that meet the min_likes criteria
+            fetch_limit = 100 
             try:
                 if accounts:
-                    fetched = fetch_tweets(keywords=keywords, usernames=accounts, start_time=start_date, end_time=end_date, max_results=limit)
+                    fetched = fetch_tweets(keywords=keywords, usernames=accounts, start_time=start_date, end_time=end_date, max_results=fetch_limit, logic="OR", min_likes=5)
                     if fetched:
                         tweets.extend(fetched)
                 
                 if keywords:
-                    if accounts and verbose:
+                    if accounts:
                         print("Fetching general Tweets (crowd sentiment)...")
                     
-                    fetched_general = fetch_tweets(keywords=keywords, start_time=start_date, end_time=end_date, max_results=limit)
+                    # Try with phrases first (High Relevance)
+                    fetched_general = fetch_tweets(keywords=keywords, start_time=start_date, end_time=end_date, max_results=fetch_limit, logic="OR", min_likes=30)
                     if fetched_general:
-                        existing_ids = {t['link'] for t in tweets}
+                        existing_ids = {t['url'] for t in tweets}
                         for t in fetched_general:
-                            if t['link'] not in existing_ids:
+                            if t['url'] not in existing_ids:
                                 tweets.append(t)
             except Exception as e:
                 print(f"Error fetching tweets: {e}")
 
+        if verbose:
+            print(f"Fetched counts — tweets: {len(tweets)}, reddit: {len(posts)}, articles: {len(articles)}")
+            if (keywords or accounts) and len(tweets) == 0:
+                print("⚠️ No tweets fetched. Check X_BEARER_TOKEN, query recency (recent search ~7 days), or consider full_archive access.")
+
         if keywords:
-            if verbose:
-                print("Fetching fresh Reddit posts...")
+            print("Fetching fresh Reddit posts...")
             try:
-                fetched = fetch_posts(keywords=keywords, subreddits=subreddits, limit=limit)
+                fetched = fetch_posts(keywords=keywords, subreddits=subreddits, limit=limit, logic="OR")
                 if fetched:
                     posts = fetched
             except Exception as e:
                 print(f"Error fetching reddit posts: {e}")
 
-            if verbose:
-                print("Fetching fresh Reuters articles...")
+            print("Fetching fresh Reuters articles...")
             try:
-                fetched = fetch_articles(keywords=keywords, limit=limit, start_time=start_date, end_time=end_date)
+                fetched = fetch_articles(keywords=keywords, limit=limit, start_time=start_date, end_time=end_date, logic="OR")
                 if fetched:
                     articles = fetched
             except Exception as e:
@@ -156,16 +165,25 @@ def get_market_sentiment(market: str = None, contracts: list = None, start_date:
             print(f"[{i+1}/{len(items)}] Analyzing item from {item['source']}...")
 
         analysis = analyze_text(item['text'], item['source'], market=market)
-        
-        if analysis.get('is_useful'):
+
+        # Only include useful items
+        is_useful = analysis.get('is_useful')
+
+        if is_useful:
             if verbose:
                 print(f"  -> Useful! Sentiment: {analysis.get('sentiment')}")
-            relevant_items.append({
+            
+            result_item = {
                 "source": item['source'],
                 "content": item['text'],
                 "sentiment": analysis.get('sentiment'),
-                "reasoning": analysis.get('reason')
-            })
+                "reasoning": analysis.get('reason'),
+                "meta": item.get('meta'),
+                "link": item.get('original', {}).get('url') if isinstance(item.get('original'), dict) else None,
+            }
+            relevant_items.append(result_item)
+            if on_item:
+                on_item(result_item)
         elif verbose:
             print(f"  -> Not useful. Reason: {analysis.get('reason')}")
             

@@ -98,7 +98,7 @@ def load_from_csv():
             
         console.print(f"\n[bold green]Displayed {count} articles from CSV.[/bold green]")
 
-def fetch_articles(keywords=None, limit=10, start_time=None, end_time=None):
+def fetch_articles(keywords=None, limit=10, start_time=None, end_time=None, logic="AND"):
     """
     Fetches articles from Reuters using Google News RSS feed.
     
@@ -107,12 +107,14 @@ def fetch_articles(keywords=None, limit=10, start_time=None, end_time=None):
         limit (int): Number of articles to return.
         start_time (str): ISO 8601 start time.
         end_time (str): ISO 8601 end time.
+        logic (str): "AND" or "OR" for combining keywords.
     """
     if not keywords:
         console.print("[bold red]Error:[/bold red] Keywords are required for search.")
         return
 
-    query_str = " ".join(keywords)
+    join_op = " OR " if logic.upper() == "OR" else " "
+    query_str = join_op.join(keywords)
     
     # Add date filtering to query if provided
     # Google News supports "after:YYYY-MM-DD" and "before:YYYY-MM-DD"

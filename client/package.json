@@ -1,7 +1,7 @@
 {
   "name": "grok-trader-extension",
   "version": "1.0.0",
-  "description": "Chrome extension for AI-powered Polymarket analysis",
+  "description": "Chrome extension for AI-powered Polymarket analysis.",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -159,7 +159,7 @@ def load_from_csv():
             
         console.print(f"\n[bold green]Displayed {count} posts from CSV.[/bold green]")
 
-def build_query(keywords=None, logic="AND", site_filter=None):
+def build_query(keywords=None, logic="OR", site_filter=None):
     """Constructs a search query for Reddit."""
     if not keywords:
         return ""
@@ -176,7 +176,7 @@ def build_query(keywords=None, logic="AND", site_filter=None):
 
 def fetch_posts(keywords=None, 
                 subreddits=None, 
-                logic="AND", 
+                logic="OR", 
                 limit=10, 
                 time_filter="all",
                 sort="relevance"):
@@ -225,6 +225,27 @@ def fetch_posts(keywords=None,
 
         data = response.json()
         posts_data = data.get('data', {}).get('children', [])
+
+        # Auto-Retry Logic: If no results and logic is AND, try OR
+        if not posts_data and logic.upper() == "AND" and keywords and len(keywords) > 1:
+            console.print("[bold yellow]No results with AND logic. Retrying with OR logic...[/bold yellow]")
+            query = build_query(keywords, "OR", None)
+            params['q'] = query
+            response = requests.get(url, headers=headers, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                posts_data = data.get('data', {}).get('children', [])
+
+        # Auto-Retry Logic: If still no results, try simplified keywords
+        if not posts_data and keywords and len(keywords) > 2:
+             console.print("[bold yellow]No results. Retrying with simplified keywords (first 2)...[/bold yellow]")
+             simple_keywords = keywords[:2]
+             query = build_query(simple_keywords, "OR", None)
+             params['q'] = query
+             response = requests.get(url, headers=headers, params=params)
+             if response.status_code == 200:
+                data = response.json()
+                posts_data = data.get('data', {}).get('children', [])
 
         fetched_posts = []
         count = 0
@@ -285,7 +306,7 @@ def load_posts(keywords=None,
                        authors=None,
                        start_time=None, 
                        end_time=None, 
-                       logic="AND", 
+                       logic="OR", 
                        min_score=0, 
                        min_comments=0):
 
