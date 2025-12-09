@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -10,7 +10,7 @@ from polymarket.asset_id import fetch_event_market_slugs
 from polymarket.feed import PolymarketFeed
 from process_market import get_market_sentiment
 from autotrade_orm import AutoTrade
-from strategy.other import get_x_data, get_reddit_data, get_reuter_data
+from strategy.autotrader import start_strategy_autotrader
 
 app = FastAPI()
 
@@ -38,6 +38,9 @@ websocket_connections: dict[str, WebSocket] = {}
 # Store active auto trades by market slug (one per market)
 active_autotrades: dict[str, AutoTrade] = {}  # market_slug -> AutoTrade object
 
+# Store running autotrader feeds by market slug
+active_feeds: dict[str, tuple] = {}  # market_slug -> (polymarket_feed, tweet_feed)
+
 
 class ChatRequest(BaseModel):
     client_id: str
@@ -60,8 +63,8 @@ class ResearchFollowupRequest(BaseModel):
 
 class AutoTradeRequest(BaseModel):
     client_id: str
+    event_slug: str
     market_slug: str
-    x_handles: list[str]
     condition: str  # Natural language condition - model will determine buy/sell
     amount: float  # dollar amount
     limit: float  # limit price
@@ -208,16 +211,16 @@ async def research_followup_endpoint(request: ResearchFollowupRequest):
 
 
 @app.post("/autotrade/start")
-async def start_autotrade(request: AutoTradeRequest):
-    """Start an auto trade based on X account activity and conditions"""
+async def start_autotrade(request: AutoTradeRequest, background_tasks: BackgroundTasks):
+    """Start an auto trade that monitors for specified conditions"""
     client_id = request.client_id
 
-    vprint(f"🤖 Auto trade request from {client_id}:")
-    vprint(f"   Market: {request.market_slug}")
-    vprint(f"   Watching X handles: {', '.join(request.x_handles)}")
-    vprint(f"   Condition: {request.condition}")
-    vprint(f"   Amount: ${request.amount}")
-    vprint(f"   Limit: {request.limit}")
+    print(f"🤖 Auto trade request from {client_id}:")
+    print(f"   Event: {request.event_slug}")
+    print(f"   Market: {request.market_slug}")
+    print(f"   Condition: {request.condition}")
+    print(f"   Amount: ${request.amount}")
+    print(f"   Limit: {request.limit}")
 
     # Check if there's already an auto trade for this market
     if request.market_slug in active_autotrades:
@@ -233,32 +236,45 @@ async def start_autotrade(request: AutoTradeRequest):
 
     auto_trade_id = f"auto_{int(time.time())}_{client_id[:8]}"
 
+    # Get websocket connection for this client
+    websocket = websocket_connections.get(client_id)
+
     # Create AutoTrade object
     auto_trade = AutoTrade(
         id=auto_trade_id,
+        event_slug=request.event_slug,
         market_slug=request.market_slug,
-        x_handles=request.x_handles,
         condition=request.condition,
         amount=request.amount,
         limit=request.limit,
+        websocket=websocket,
     )
 
     # Store in active auto trades
     active_autotrades[request.market_slug] = auto_trade
 
-    # TODO: Implement auto trade logic
-    # - Monitor X accounts for posts
-    # - Evaluate condition using LLM to determine buy/sell action
-    # - Execute trade when condition is met
-    # - Send updates via WebSocket
+    # Start the strategy autotrader in background
+    try:
+        polymarket_feed, tweet_feed = start_strategy_autotrader(auto_trade)
+        active_feeds[request.market_slug] = (polymarket_feed, tweet_feed)
+        print(f"✓ Started strategy autotrader for {request.market_slug}")
+    except Exception as e:
+        import traceback
+        print(f"❌ Failed to start autotrader: {e}")
+        traceback.print_exc()
+        # Clean up on failure
+        del active_autotrades[request.market_slug]
+        return {
+            "status": "error",
+            "message": f"Failed to start autotrader: {str(e)}"
+        }
 
-    vprint(f"✓ Stored auto trade {auto_trade_id} for market {request.market_slug}")
+    print(f"✓ Stored auto trade {auto_trade_id} for market {request.market_slug}")
 
     return {
         "status": "success",
         "auto_trade_id": auto_trade_id,
-        "message": f"Auto trade started. Watching {len(request.x_handles)} X accounts for condition.",
-        "watching": request.x_handles,
+        "message": f"Auto trade started. Monitoring for specified condition.",
         "condition": request.condition,
         "amount": request.amount,
         "limit": request.limit,
@@ -342,11 +358,27 @@ async def stop_autotrade(auto_trade_id: str):
             "message": "Auto trade not found",
         }
 
+    # Stop the autotrader feeds if running
+    if market_to_remove in active_feeds:
+        try:
+            polymarket_feed, tweet_feed = active_feeds[market_to_remove]
+
+            # Close the polymarket feed
+            if hasattr(polymarket_feed, 'close'):
+                polymarket_feed.close()
+                print(f"✓ Closed polymarket feed for {market_to_remove}")
+
+            # Tweet feed runs in daemon thread, will stop automatically
+
+            del active_feeds[market_to_remove]
+            print(f"✓ Stopped autotrader feeds for {market_to_remove}")
+        except Exception as e:
+            print(f"⚠️ Error stopping feeds: {e}")
+
     # Remove from active trades
     del active_autotrades[market_to_remove]
     vprint(f"✓ Removed auto trade {auto_trade_id} from market {market_to_remove}")
 
-    # TODO: Implement cleanup logic (stop monitoring, close connections, etc.)
     return {
         "status": "stopped",
         "auto_trade_id": auto_trade_id,

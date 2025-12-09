@@ -1055,10 +1055,30 @@
   margin: 8px 0 16px 0;
   font-size: 14px;
   color: var(--polymarket-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.grok-auto-trade-status-label {
+  color: var(--polymarket-text);
 }
 
 .grok-status-active {
   color: #10b981;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.grok-pnl-positive {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.grok-pnl-negative {
+  color: #ef4444;
   font-weight: 600;
 }
 
@@ -1162,6 +1182,112 @@
   padding: 12px 16px;
   border-radius: 8px;
   font-size: 14px;
+}
+
+/* Trade History Styles */
+.grok-trade-history-title {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--polymarket-text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.grok-trade-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.grok-trade-history-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.grok-trade-history-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.grok-trade-history-list::-webkit-scrollbar-thumb {
+  background: var(--polymarket-border);
+  border-radius: 3px;
+}
+
+.grok-trade-history-list::-webkit-scrollbar-thumb:hover {
+  background: var(--polymarket-accent);
+}
+
+.grok-trade-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--polymarket-border);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.grok-trade-item:hover {
+  background: rgba(0, 0, 0, 0.3);
+  transform: translateX(2px);
+}
+
+.grok-trade-item.trade-buy {
+  border-left: 3px solid #10b981;
+}
+
+.grok-trade-item.trade-sell {
+  border-left: 3px solid #ef4444;
+}
+
+.grok-trade-action {
+  flex-shrink: 0;
+}
+
+.grok-trade-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.grok-trade-badge.badge-buy {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.5);
+}
+
+.grok-trade-badge.badge-sell {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+.grok-trade-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.grok-trade-amount {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--polymarket-text);
+}
+
+.grok-trade-time {
+  font-size: 12px;
+  color: var(--polymarket-text-secondary);
+  font-family: monospace;
 }
 
 /* Responsive adjustments */

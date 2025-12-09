@@ -10,19 +10,52 @@ if __package__ is None:
 from strategy.polymarket import Polymarket
 from strategy.tweets import TweetFeed
 from strategy.brain import produce_trading_decision
+from strategy.account import create_client_from_env, place_order, get_orders
 
 
 class Strategy:
-    def __init__(self, market_slug, condition, max_size):
+    def __init__(
+        self, market_slug, condition, max_size, max_position=None, positions=None, autotrade=None
+    ):
         self.market_slug = market_slug
         self.condition = condition
         self.max_size = max_size
+        self.max_position = max_position if max_position is not None else max_size
+        self.positions = positions or []
+        self.autotrade = autotrade  # AutoTrade object for logging trades
 
         self.yes_book = None
         self.no_book = None
         self.tweets = deque(maxlen=10)
         self.tweet_ids: set[int] = set()
         self._last_decision_ts = 0.0
+        self.client = None
+        self.funder = os.environ.get("POLY_FUNDER_ADDRESS")
+        self.signature_type = (
+            int(os.environ["POLY_SIGNATURE_TYPE"])
+            if os.environ.get("POLY_SIGNATURE_TYPE") is not None
+            else None
+        )
+        try:
+            self.client = create_client_from_env(
+                funder_override=self.funder, signature_type=self.signature_type
+            )
+        except Exception as e:
+            print(f"[account][error] {e}")
+
+    def _extract_reasoning(self, response):
+        if not response:
+            return None
+        content = getattr(response, "content", None)
+        if content:
+            return content
+        outputs = getattr(response, "outputs", None)
+        if outputs:
+            for out in outputs:
+                msg = getattr(out, "message", None)
+                if msg and getattr(msg, "content", None):
+                    return msg.content
+        return None
 
     def on_new_post(self, tweet):
         tweet_id = tweet.get("tweet_id")
@@ -36,20 +69,17 @@ class Strategy:
             oldest = self.tweets.popleft()
             self.tweet_ids.discard(oldest.get("tweet_id"))
 
-        ts = tweet.get("created_at", "")[:19]
-        user = tweet.get("username") or tweet.get("name") or "unknown"
-        likes = tweet.get("likes", 0)
-        text = (tweet.get("text") or "").replace("\n", " ")
-        if len(text) > 120:
-            text = text[:117] + "..."
-
-        # keep latest tweet context; trading decisions happen on book updates
-        print(f"[tweets][{self.market_slug}] {ts} @{user} ♥{likes}: {text}")
-
     def on_new_book(self, yes_book, no_book):
-        # first time logging
-        if not self.yes_book and not self.no_book:
-            print(f"[{self.market_slug}] {yes_book} || {no_book}")
+        def fmt(book):
+            if not book:
+                return "—"
+            bid = book.best_bid(1)
+            ask = book.best_ask(1)
+            bid_s = f"{bid[0][0]:.4f}@{bid[0][1]:.0f}" if bid else "—"
+            ask_s = f"{ask[0][0]:.4f}@{ask[0][1]:.0f}" if ask else "—"
+            return f"{book.side}:{bid_s}/{ask_s}"
+
+        print(f"[{self.market_slug}] {fmt(yes_book)} || {fmt(no_book)}")
 
         self.yes_book = yes_book
         self.no_book = no_book
@@ -63,26 +93,173 @@ class Strategy:
             return
         self._last_decision_ts = now
 
-        # produce tradng decision
+        # produce trading decision
         try:
+            # refresh positions via open orders snapshot
+            if self.client:
+                try:
+                    yes_pos = get_orders(self.client, asset_id=yes_book.asset_id) or []
+                    no_pos = get_orders(self.client, asset_id=no_book.asset_id) or []
+                    self.positions = yes_pos + no_pos
+                except Exception as e:
+                    print(f"[positions][error] {e}")
+
             decision = produce_trading_decision(
                 self.max_size,
+                self.max_position,
                 self.condition,
                 self.yes_book,
                 self.no_book,
+                self.positions,
                 list(self.tweets),
             )
             print(f"[decision][{self.market_slug}] {decision}")
+            if decision.response:
+                reasoning = self._extract_reasoning(decision.response)
+                if reasoning:
+                    print(f"[grok_reasoning] {reasoning}")
+                else:
+                    print(f"[grok_response] {decision.response}")
+
+            if self.client and decision.action != "hold" and decision.size > 0:
+                token_id = (
+                    self.yes_book.asset_id
+                    if decision.outcome == "yes"
+                    else self.no_book.asset_id
+                )
+
+                # don't allow selling flat
+                if decision.action == "sell" and not self.positions:
+                    print(
+                        "[order][skip] No inventory tracked; skipping sell while flat."
+                    )
+                    return
+
+                try:
+                    order_resp = place_order(
+                        client=self.client,
+                        token_id=token_id,
+                        side=decision.action,
+                        price=decision.price,
+                        size=decision.size,
+                    )
+                    print(f"[order][placed] {order_resp}")
+
+                    # Log trade to AutoTrade if available
+                    if self.autotrade:
+                        trade_amount = decision.price * decision.size
+                        trade = self.autotrade.log_trade(
+                            action=decision.action,  # "buy" or "sell"
+                            amount=trade_amount
+                        )
+                        print(f"[autotrade][logged] {decision.action} ${trade_amount:.2f}")
+                        print(f"[autotrade][pnl] ${self.autotrade.pnl:.2f}")
+                        print(f"[autotrade][holdings] ${self.autotrade.holdings_cost:.2f}")
+
+                        # Send WebSocket update if available
+                        if self.autotrade.websocket:
+                            import asyncio
+                            try:
+                                asyncio.create_task(self.autotrade.websocket.send_json({
+                                    "message_type": "autotrade",
+                                    "type": "trade_executed",
+                                    "autotrade_id": self.autotrade.id,
+                                    "trade": {
+                                        "action": trade.action,
+                                        "amount": trade.amount,
+                                        "timestamp": trade.timestamp.isoformat(),
+                                    },
+                                    "pnl": self.autotrade.pnl,
+                                    "holdings_cost": self.autotrade.holdings_cost
+                                }))
+                            except Exception as ws_error:
+                                print(f"[websocket][error] {ws_error}")
+                except Exception as e:
+                    print(f"[order][error] {e}")
+
+            if self.client:
+                try:
+                    yes_open = get_orders(self.client, asset_id=yes_book.asset_id) or []
+                    no_open = get_orders(self.client, asset_id=no_book.asset_id) or []
+                    print(f"[open_orders] yes={len(yes_open)} no={len(no_open)}")
+                    if yes_open:
+                        print(f"  yes_open: {yes_open}")
+                    if no_open:
+                        print(f"  no_open: {no_open}")
+                except Exception as e:
+                    print(f"[open_orders][error] {e}")
         except Exception as e:
             print(f"[decision][error] {e}")
 
 
-if __name__ == "__main__":
-    event_slug = "fed-decision-in-january"
-    market_slug = "no-change-in-fed-interest-rates-after-january-2026-meeting"
-    condition = "Fed January 2026 meeting prediction market"
+def start_strategy_autotrader(autotrade):
+    """
+    Start the full autotrader strategy with an AutoTrade object.
 
-    my_strategy = Strategy(market_slug, condition, max_size=10)
+    Args:
+        autotrade: AutoTrade object from autotrade_orm.py
+
+    Returns:
+        tuple: (polymarket_feed, tweet_feed) for cleanup
+    """
+    print(f"🚀 Starting strategy autotrader for {autotrade.market_slug}")
+    print(f"   Event: {autotrade.event_slug}")
+    print(f"   Condition: {autotrade.condition}")
+    print(f"   Amount: ${autotrade.amount}")
+    print(f"   Limit: {autotrade.limit}")
+
+    # Convert dollar amount to size (number of contracts)
+    # Assuming price around limit, size = amount / limit
+    max_size = int(autotrade.amount / autotrade.limit) if autotrade.limit > 0 else 10
+    max_position = max_size
+
+    # Create strategy with AutoTrade object
+    strategy = Strategy(
+        market_slug=autotrade.market_slug,
+        condition=autotrade.condition,
+        max_size=max_size,
+        max_position=max_position,
+        autotrade=autotrade
+    )
+
+    # Start Polymarket feed
+    polymarket_feed = Polymarket(
+        autotrade.event_slug,
+        strategy=strategy,
+        market_slug=autotrade.market_slug
+    )
+
+    # Start tweet feed
+    tweet_feed = TweetFeed(
+        market_slug=autotrade.market_slug,
+        min_likes=5,
+        strategy=strategy,
+        poll_interval=30,
+        max_results=20,
+    )
+
+    def poll_tweets():
+        while True:
+            try:
+                tweet_feed.run_once()
+            except Exception as e:
+                print(f"[tweets] error: {e}")
+            time.sleep(tweet_feed.poll_interval)
+
+    # Start tweet polling in background
+    threading.Thread(target=poll_tweets, daemon=True).start()
+
+    print("✅ Strategy autotrader started successfully")
+
+    return polymarket_feed, tweet_feed
+
+
+if __name__ == "__main__":
+    event_slug = "spacex-ipo-closing-market-cap"
+    market_slug = "will-spacex-not-ipo-by-december-31-2027"
+    condition = "Comfort trading the SpaceX IPO market; focus on asymmetric buy/sell setups around IPO timing."
+
+    my_strategy = Strategy(market_slug, condition, max_size=5, max_position=5)
     feed = Polymarket(event_slug, strategy=my_strategy, market_slug=market_slug)
     tweet_feed = TweetFeed(
         market_slug=market_slug,
