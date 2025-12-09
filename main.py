@@ -8,9 +8,19 @@ from grok_chat import stream_chat_response
 from grok_research import research_market, research_followup
 from polymarket.asset_id import fetch_event_market_slugs
 from polymarket.feed import PolymarketFeed
+from process_market import get_market_sentiment
 from autotrade_orm import AutoTrade
+from strategy.other import get_x_data, get_reddit_data, get_reuter_data
 
 app = FastAPI()
+
+# Verbose logging flag for testing
+VERBOSE = False
+
+
+def vprint(*args, **kwargs):
+    if VERBOSE:
+        print(*args, **kwargs)
 
 # Enable CORS for the extension
 app.add_middleware(
@@ -71,7 +81,7 @@ async def chat_endpoint(request: ChatRequest):
     websocket = websocket_connections[client_id]
 
     market_context = f" (market: {request.market_slug})" if request.market_slug else ""
-    print(
+    vprint(
         f"💬 Chat request from {client_id}: {len(request.messages)} messages{market_context}"
     )
 
@@ -94,7 +104,7 @@ async def research_endpoint(request: ResearchRequest):
 
     websocket = websocket_connections[client_id]
 
-    print(f"🔬 Research request from {client_id}: {request.market_title}")
+    vprint(f"🔬 Research request from {client_id}: {request.market_title}")
 
     # Fetch live market prices using PolymarketFeed
     yes_price = 500  # Default fallback
@@ -149,7 +159,7 @@ async def research_endpoint(request: ResearchRequest):
                         )  # *10 because prices are in cents*10
                         no_price = int(100 * (1 - best_bid) * 10)
 
-                        print(
+                        vprint(
                             f"✓ Got live prices: YES={yes_price/10:.1f}¢ NO={no_price/10:.1f}¢"
                         )
                         break
@@ -159,10 +169,10 @@ async def research_endpoint(request: ResearchRequest):
             feed.ws.close()
 
     except Exception as e:
-        print(f"⚠️  Error fetching live prices: {e}")
-        print(f"   Using default prices: YES=50¢ NO=50¢")
+        vprint(f"⚠️  Error fetching live prices: {e}")
+        vprint(f"   Using default prices: YES=50¢ NO=50¢")
 
-    print(f"💰 Yes price: {yes_price}, No price: {no_price}")
+    vprint(f"💰 Yes price: {yes_price}, No price: {no_price}")
     # Stream the research via WebSocket
     await research_market(
         websocket=websocket,
@@ -189,7 +199,7 @@ async def research_followup_endpoint(request: ResearchFollowupRequest):
 
     websocket = websocket_connections[client_id]
 
-    print(f"💬 Research follow-up from {client_id}: {len(request.messages)} messages")
+    vprint(f"💬 Research follow-up from {client_id}: {len(request.messages)} messages")
 
     # Stream the follow-up response via WebSocket
     await research_followup(websocket, request.messages)
@@ -202,12 +212,12 @@ async def start_autotrade(request: AutoTradeRequest):
     """Start an auto trade based on X account activity and conditions"""
     client_id = request.client_id
 
-    print(f"🤖 Auto trade request from {client_id}:")
-    print(f"   Market: {request.market_slug}")
-    print(f"   Watching X handles: {', '.join(request.x_handles)}")
-    print(f"   Condition: {request.condition}")
-    print(f"   Amount: ${request.amount}")
-    print(f"   Limit: {request.limit}")
+    vprint(f"🤖 Auto trade request from {client_id}:")
+    vprint(f"   Market: {request.market_slug}")
+    vprint(f"   Watching X handles: {', '.join(request.x_handles)}")
+    vprint(f"   Condition: {request.condition}")
+    vprint(f"   Amount: ${request.amount}")
+    vprint(f"   Limit: {request.limit}")
 
     # Check if there's already an auto trade for this market
     if request.market_slug in active_autotrades:
@@ -242,7 +252,7 @@ async def start_autotrade(request: AutoTradeRequest):
     # - Execute trade when condition is met
     # - Send updates via WebSocket
 
-    print(f"✓ Stored auto trade {auto_trade_id} for market {request.market_slug}")
+    vprint(f"✓ Stored auto trade {auto_trade_id} for market {request.market_slug}")
 
     return {
         "status": "success",
@@ -258,7 +268,7 @@ async def start_autotrade(request: AutoTradeRequest):
 @app.get("/autotrade/status/{auto_trade_id}")
 async def get_autotrade_status(auto_trade_id: str):
     """Get the status of an active auto trade"""
-    print(f"📊 Status request for auto trade: {auto_trade_id}")
+    vprint(f"📊 Status request for auto trade: {auto_trade_id}")
 
     # Check if this auto trade exists
     found_trade = None
@@ -288,7 +298,7 @@ async def get_autotrade_status(auto_trade_id: str):
 @app.get("/autotrade/list")
 async def list_autotrades():
     """List all active auto trades"""
-    print(f"📋 Listing {len(active_autotrades)} active auto trades")
+    vprint(f"📋 Listing {len(active_autotrades)} active auto trades")
 
     return {
         "status": "success",
@@ -303,7 +313,7 @@ async def list_autotrades():
 @app.get("/autotrade/market/{market_slug}")
 async def get_autotrade_by_market(market_slug: str):
     """Get the auto trade for a specific market"""
-    print(f"🔍 Looking up auto trade for market: {market_slug}")
+    vprint(f"🔍 Looking up auto trade for market: {market_slug}")
 
     auto_trade = active_autotrades.get(market_slug)
 
@@ -316,7 +326,7 @@ async def get_autotrade_by_market(market_slug: str):
 @app.post("/autotrade/stop/{auto_trade_id}")
 async def stop_autotrade(auto_trade_id: str):
     """Stop an active auto trade"""
-    print(f"🛑 Stop request for auto trade: {auto_trade_id}")
+    vprint(f"🛑 Stop request for auto trade: {auto_trade_id}")
 
     # Find and remove the auto trade
     market_to_remove = None
@@ -334,7 +344,7 @@ async def stop_autotrade(auto_trade_id: str):
 
     # Remove from active trades
     del active_autotrades[market_to_remove]
-    print(f"✓ Removed auto trade {auto_trade_id} from market {market_to_remove}")
+    vprint(f"✓ Removed auto trade {auto_trade_id} from market {market_to_remove}")
 
     # TODO: Implement cleanup logic (stop monitoring, close connections, etc.)
     return {
@@ -350,13 +360,13 @@ async def get_market_slugs(
 ):
     """Get all market slugs for a given event slug"""
     try:
-        print(f"📊 Fetching market slugs for event: {event_slug}")
+        vprint(f"📊 Fetching market slugs for event: {event_slug}")
         slugs = fetch_event_market_slugs(event_slug)
 
         return {"status": "success", "event_slug": event_slug, "market_slugs": slugs}
     except Exception as e:
         error_msg = str(e)
-        print(f"❌ Error fetching market slugs: {error_msg}")
+        vprint(f"❌ Error fetching market slugs: {error_msg}")
         return {"status": "error", "error": error_msg}
 
 
@@ -366,7 +376,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     client_host = websocket.client.host if websocket.client else "unknown"
     client_port = websocket.client.port if websocket.client else "unknown"
-    print(f"✓ Client connected from {client_host}:{client_port}")
+    vprint(f"✓ Client connected from {client_host}:{client_port}")
 
     client_id = None
 
@@ -383,7 +393,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     client_id = message.get("client_id")
                     if client_id:
                         websocket_connections[client_id] = websocket
-                        print(f"📝 Registered client: {client_id}")
+                        vprint(f"📝 Registered client: {client_id}")
                         await websocket.send_json(
                             {"type": "registered", "client_id": client_id}
                         )
@@ -391,7 +401,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Handle event slug
                 elif message.get("event_slug"):
                     event_slug = message.get("event_slug")
-                    print(f"📍 Received event slug: {event_slug}")
+                    vprint(f"📍 Received event slug: {event_slug}")
 
                     # Send acknowledgment back to client
                     response = {
@@ -399,22 +409,83 @@ async def websocket_endpoint(websocket: WebSocket):
                         "message": f"Processing event: {event_slug}",
                     }
                     await websocket.send_json(response)
+
+                # Handle feed (sentiment) request from client
+                elif message.get("type") == "feed_request":
+                    market_title = message.get("market_title") or ""
+                    cid = message.get("client_id") or ""
+                    vprint(f"📥 Feed request for market: {market_title} (client: {cid})")
+
+                    async def run_feed():
+                        loop = asyncio.get_running_loop()
+
+                        def on_item(item):
+                            if VERBOSE:
+                                vprint(f"[FEED ITEM] {item}")
+                            asyncio.run_coroutine_threadsafe(
+                                websocket.send_json(
+                                    {
+                                        "message_type": "feed",
+                                        "type": "sentiment_item",
+                                        "item": item,
+                                    }
+                                ),
+                                loop,
+                            )
+
+                        try:
+                            # Gather sentiment items via process_market and also fetch raw links from strategy.other feeds
+                            items = await loop.run_in_executor(
+                                None,
+                                lambda: get_market_sentiment(
+                                    market=market_title,
+                                    limit=30,
+                                    verbose=VERBOSE,
+                                    on_item=on_item,
+                                ),
+                            )
+
+                            # Normalize market slug for link-based fetches
+                            slug = (market_title or "").strip().lower().replace(" ", "-")
+
+                            # Only use the primary sentiment items (no extra fetches)
+                            combined_items = list(items or [])
+
+                            await websocket.send_json(
+                                {
+                                    "message_type": "feed",
+                                    "type": "sentiment_items",
+                                    "items": combined_items,
+                                }
+                            )
+                        except Exception as e:
+                            if VERBOSE:
+                                vprint(f"❌ Feed request failed: {e}")
+                            await websocket.send_json(
+                                {
+                                    "message_type": "feed",
+                                    "type": "error",
+                                    "error": str(e),
+                                }
+                            )
+
+                    asyncio.create_task(run_feed())
                 else:
-                    print(f"❓ Received unknown message: {data}")
+                    vprint(f"❓ Received unknown message: {data}")
 
             except json.JSONDecodeError:
-                print(f"Invalid JSON received: {data}")
+                vprint(f"Invalid JSON received: {data}")
                 error_response = {"type": "error", "message": "Invalid JSON format"}
                 await websocket.send_json(error_response)
 
     except WebSocketDisconnect:
-        print(f"✗ Client disconnected from {client_host}:{client_port}")
+        vprint(f"✗ Client disconnected from {client_host}:{client_port}")
         # Remove from connections
         if client_id and client_id in websocket_connections:
             del websocket_connections[client_id]
-            print(f"🗑️ Removed client: {client_id}")
+            vprint(f"🗑️ Removed client: {client_id}")
 
 
 if __name__ == "__main__":
-    print("Starting FastAPI WebSocket server on ws://localhost:8765/ws")
+    vprint("Starting FastAPI WebSocket server on ws://localhost:8765/ws")
     uvicorn.run(app, host="localhost", port=8765)
