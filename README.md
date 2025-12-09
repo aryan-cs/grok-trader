@@ -1,7 +1,7 @@
 
 # grok-trader
 
-Grok Trader brings data to your fingertips, giving the average person the insights of a trading analyst for any prediction market. The tool streams live sentiment data, pulling news and social signals (X, Reddit, Reuters), and delivers research/analysis through LLM-powered inferencing. Results are displayed in a Chrome sidebar. Built for the 2025 xAI Hackathon by [Ayush Gundawar](https://github.com/ayushgun), [Aryan Gupta](https://github.com/aryan-cs), and [Yuming He](https://github.com/yuming-h).
+Grok Trader brings data to your fingertips, giving the average person the insights of a trading analyst for any prediction market (currently, we support [Polymarket](https://polymarket.com/)). The tool streams live sentiment data, pulling news and social signals (X, Reddit, Reuters), and delivers research/analysis through LLM-powered inferencing. Results are displayed in a Chrome sidebar. Built for the 2025 xAI Hackathon by [Ayush Gundawar](https://github.com/ayushgun), [Aryan Gupta](https://github.com/aryan-cs), and [Yuming He](https://github.com/yuming-h).
 
 ## What it does
 - Streams market-aware sentiment and links in real time via WebSocket (FastAPI).
